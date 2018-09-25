@@ -24,13 +24,13 @@ func NewSinkWorkerPool(name string, handler NodeHandler, buffer int) NodeWorker 
 }
 
 // Start SinkWorkerPool
-func (swp *SinkWorkerPool) Start() error {
+func (swp *SinkWorkerPool) Start(ctx *CnvContext) error {
 	for i := 0; i < swp.Handler.Count(); i++ {
 		swp.Wg.Add(1)
 
 		go func() {
 			defer swp.Wg.Done()
-			swp.Handler.Execute(swp.inputChannel, nil)
+			swp.Handler.Execute(ctx, swp.inputChannel, nil)
 		}()
 	}
 	return nil
@@ -62,8 +62,8 @@ func (swp *SinkWorkerPool) WorkerType() string {
 	return SinkWorkerType
 }
 
-// Stop SinkWorkerPool
-func (swp *SinkWorkerPool) Stop() error {
+// WaitAndStop SinkWorkerPool
+func (swp *SinkWorkerPool) WaitAndStop() error {
 	swp.Wg.Wait()
 	return nil
 }

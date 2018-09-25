@@ -45,8 +45,8 @@ type ConcreteJointWorker struct {
 
 // NodeWorker interface binds to nodes that have the capability to fetch intermidiate data, and forward it to next node
 type NodeWorker interface {
-	Start() error
-	Stop() error
+	Start(ctx *CnvContext) error
+	WaitAndStop() error
 	WorkerType() string
 	SetInputChannel(chan map[string]interface{}) error
 	SetOutputChannel(chan map[string]interface{}) error
@@ -56,8 +56,8 @@ type NodeWorker interface {
 
 // JointWorker interface binds to nodes that have the capability to fetch intermidiate data, and forward it to next node
 type JointWorker interface {
-	Start() error
-	Stop() error
+	Start(ctx *CnvContext) error
+	WaitAndStop() error
 	SetInputChannels([]chan map[string]interface{}) error
 	SetOutputChannels([]chan map[string]interface{}) error
 	GetInputChannels() ([]chan map[string]interface{}, error)

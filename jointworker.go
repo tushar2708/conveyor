@@ -71,12 +71,12 @@ func (jwp *JointWorkerPool) AddOutputChannel(outChan chan map[string]interface{}
 }
 
 // Start JoinWorkerPool
-func (jwp *JointWorkerPool) Start() error {
+func (jwp *JointWorkerPool) Start(ctx *CnvContext) error {
 	for i := 0; i < jwp.Handler.Count(); i++ {
 		jwp.Wg.Add(1)
 		go func() {
 			defer jwp.Wg.Done()
-			if err := jwp.Handler.Execute(jwp.inputChannels, jwp.outputChannels); err != nil {
+			if err := jwp.Handler.Execute(ctx, jwp.inputChannels, jwp.outputChannels); err != nil {
 				log.Println("join handler start failed", err)
 				return
 			}
@@ -85,8 +85,8 @@ func (jwp *JointWorkerPool) Start() error {
 	return nil
 }
 
-// Stop FetchWorkerPool
-func (jwp *JointWorkerPool) Stop() error {
+// WaitAndStop FetchWorkerPool
+func (jwp *JointWorkerPool) WaitAndStop() error {
 	jwp.Wg.Wait()
 
 	for _, ch := range jwp.outputChannels {

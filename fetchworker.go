@@ -60,12 +60,12 @@ func (fwp *FetchWorkerPool) SetOutputChannel(outChan chan map[string]interface{}
 }
 
 // Start FetchWorkerPool
-func (fwp *FetchWorkerPool) Start() error {
+func (fwp *FetchWorkerPool) Start(ctx *CnvContext) error {
 	for i := 0; i < fwp.Handler.Count(); i++ {
 		fwp.Wg.Add(1)
 		go func() {
 			defer fwp.Wg.Done()
-			fwp.Handler.Execute(fwp.inputChannel, fwp.outputChannel)
+			fwp.Handler.Execute(ctx, fwp.inputChannel, fwp.outputChannel)
 		}()
 	}
 	return nil
@@ -76,8 +76,8 @@ func (fwp *FetchWorkerPool) WorkerType() string {
 	return FetchWorkerType
 }
 
-// Stop FetchWorkerPool
-func (fwp *FetchWorkerPool) Stop() error {
+// WaitAndStop FetchWorkerPool
+func (fwp *FetchWorkerPool) WaitAndStop() error {
 	fwp.Wg.Wait()
 	close(fwp.outputChannel)
 	return nil

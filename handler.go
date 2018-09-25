@@ -2,14 +2,14 @@ package conveyor
 
 // NodeHandler interface binds to nodes that have the capability to fetch intermidiate data, and forward it to next node
 type NodeHandler interface {
-	Execute(inChan <-chan map[string]interface{}, outChan chan<- map[string]interface{})
+	Execute(ctx *CnvContext, inChan <-chan map[string]interface{}, outChan chan<- map[string]interface{})
 	Count() int
 	CleanUp() error
 }
 
 // JointHandler interface binds to nodes that have the capability to fetch intermidiate data, and forward it to next node
 type JointHandler interface {
-	Execute(inChan []chan map[string]interface{}, outChan []chan map[string]interface{}) error
+	Execute(ctx *CnvContext, inChan []chan map[string]interface{}, outChan []chan map[string]interface{}) error
 	Count() int
 	InputCount() int
 	OutputCount() int

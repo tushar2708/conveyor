@@ -17,7 +17,7 @@ type Message struct {
 // Conveyor to run the graph
 type Conveyor struct {
 	Name string
-	ctx  CnvContext
+	ctx  *CnvContext
 
 	progress         chan float64
 	duration         time.Duration
@@ -56,18 +56,22 @@ func New(name string, expectedDuration time.Duration) (*Conveyor, error) {
 		expectedDuration = time.Hour
 	}
 
+	_ctx := &CnvContext{
+		Context: context.Background(),
+		Data: CtxData{
+			Name:   name,
+			logs:   make(chan Message, 100),
+			status: make(chan string, 1),
+		},
+	}
+	ctx, cancel := _ctx.WithCancel()
+	ctx.Data.cancelProgress = cancel
+
 	cnv := &Conveyor{
 		Name:             name,
 		expectedDuration: expectedDuration,
 		progress:         make(chan float64, 1),
-		ctx: CnvContext{
-			Context: context.Background(),
-			Data: CtxData{
-				Name:   name,
-				logs:   make(chan Message, 100),
-				status: make(chan string, 1),
-			},
-		},
+		ctx:              ctx,
 	}
 	return cnv, nil
 }
@@ -78,6 +82,7 @@ func (cnv *Conveyor) GetLastWorker() (NodeWorker, error) {
 	if workerCount > 0 {
 		return cnv.workers[workerCount-1], nil
 	}
+
 	return nil, ErrEmptyConveyor
 }
 
@@ -116,12 +121,12 @@ func (cnv *Conveyor) Start() error {
 		wg.Add(1)
 		go func(nodeWorker NodeWorker) {
 			defer wg.Done()
-			if err := nodeWorker.Start(); err != nil {
+			if err := nodeWorker.Start(cnv.ctx); err != nil {
 				log.Println("node worker start failed", err)
 				return
 			}
 
-			if err := nodeWorker.Stop(); err != nil {
+			if err := nodeWorker.WaitAndStop(); err != nil {
 				log.Println("node worker stop failed", err)
 			}
 		}(nodeWorker)
@@ -132,12 +137,12 @@ func (cnv *Conveyor) Start() error {
 		go func(jointWorker JointWorker) {
 			defer wg.Done()
 
-			if err := jointWorker.Start(); err != nil {
+			if err := jointWorker.Start(cnv.ctx); err != nil {
 				log.Println("join worker start failed", err)
 				return
 			}
 
-			if err := jointWorker.Stop(); err != nil {
+			if err := jointWorker.WaitAndStop(); err != nil {
 				log.Println("join worker stop failed", err)
 			}
 
@@ -147,6 +152,14 @@ func (cnv *Conveyor) Start() error {
 	// wait for the conveyor to finish
 	wg.Wait()
 
+	return nil
+}
+
+// Stop Conveyor by cancelling context. It's used to kill a campaign while it's running.
+// No need to call it if campaign is finishing on it's own
+func (cnv *Conveyor) Stop() error {
+	// Cancel ctx
+	cnv.ctx.Data.cancelProgress()
 	return nil
 }
 
@@ -163,7 +176,7 @@ loop:
 		}
 
 		select {
-		case <-ctx.Done():
+		case <-ctx.Done(): // add a timeout context
 			break loop
 		case cnv.progress <- percentDone:
 		default:
@@ -180,8 +193,9 @@ type CtxData struct {
 
 	logs           chan Message
 	status         chan string
-	cancelAll      context.CancelFunc
 	cancelProgress context.CancelFunc
+	// cancelAll      context.CancelFunc
+
 }
 
 // CnvContext is a wrapper over context.Context

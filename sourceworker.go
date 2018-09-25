@@ -45,12 +45,12 @@ func (swp *SourceWorkerPool) SetOutputChannel(outChan chan map[string]interface{
 }
 
 // Start SourceWorkerPool
-func (swp *SourceWorkerPool) Start() error {
+func (swp *SourceWorkerPool) Start(ctx *CnvContext) error {
 	for i := 0; i < swp.Handler.Count(); i++ {
 		swp.Wg.Add(1)
 		go func() {
 			defer swp.Wg.Done()
-			swp.Handler.Execute(nil, swp.outputChannel)
+			swp.Handler.Execute(ctx, nil, swp.outputChannel)
 		}()
 	}
 	return nil
@@ -61,8 +61,8 @@ func (swp *SourceWorkerPool) WorkerType() string {
 	return SourceWorkerType
 }
 
-// Stop SourceWorkerPool
-func (swp *SourceWorkerPool) Stop() error {
+// WaitAndStop SourceWorkerPool
+func (swp *SourceWorkerPool) WaitAndStop() error {
 	swp.Wg.Wait()
 	close(swp.outputChannel)
 	return nil

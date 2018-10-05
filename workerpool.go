@@ -26,7 +26,7 @@ var (
 // WPool to run different nodes of comex graph
 type WPool struct {
 	Name string
-	// Handler    common.NodeHandler
+	// Executor    common.NodeExecutor
 	sigChannel chan interface{}
 	Wg         sync.WaitGroup
 }
@@ -34,13 +34,13 @@ type WPool struct {
 // ConcreteNodeWorker to run different nodes of comex graph
 type ConcreteNodeWorker struct {
 	WPool
-	Handler NodeHandler
+	Executor NodeExecutor
 }
 
 // ConcreteJointWorker to run different nodes of comex graph
 type ConcreteJointWorker struct {
 	WPool
-	Handler JointHandler
+	Executor JointExecutor
 }
 
 // NodeWorker interface binds to nodes that have the capability to fetch intermidiate data, and forward it to next node
@@ -68,7 +68,7 @@ type JointWorker interface {
 
 // Start the worker
 func (wp *ConcreteNodeWorker) Start() {
-	for i := 0; i < wp.Handler.Count(); i++ {
+	for i := 0; i < wp.Executor.Count(); i++ {
 		wp.Wg.Add(1)
 		go wp.run()
 	}
@@ -76,7 +76,7 @@ func (wp *ConcreteNodeWorker) Start() {
 
 // Start the worker
 func (wp *ConcreteJointWorker) Start() {
-	for i := 0; i < wp.Handler.Count(); i++ {
+	for i := 0; i < wp.Executor.Count(); i++ {
 		wp.Wg.Add(1)
 		go wp.run()
 	}

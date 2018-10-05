@@ -8,14 +8,14 @@ type SourceWorkerPool struct {
 }
 
 // NewSourceWorkerPool creates a new SourceWorkerPool
-func NewSourceWorkerPool(name string, handler NodeHandler, buffer int) NodeWorker {
+func NewSourceWorkerPool(name string, executor NodeExecutor, buffer int) NodeWorker {
 
 	swp := &SourceWorkerPool{
 		ConcreteNodeWorker: ConcreteNodeWorker{
 			WPool: WPool{
 				Name: name,
 			},
-			Handler: handler,
+			Executor: executor,
 		},
 	}
 
@@ -46,11 +46,11 @@ func (swp *SourceWorkerPool) SetOutputChannel(outChan chan map[string]interface{
 
 // Start SourceWorkerPool
 func (swp *SourceWorkerPool) Start(ctx *CnvContext) error {
-	for i := 0; i < swp.Handler.Count(); i++ {
+	for i := 0; i < swp.Executor.Count(); i++ {
 		swp.Wg.Add(1)
 		go func() {
 			defer swp.Wg.Done()
-			swp.Handler.Execute(ctx, nil, swp.outputChannel)
+			swp.Executor.Execute(ctx, nil, swp.outputChannel)
 		}()
 	}
 	return nil

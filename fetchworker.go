@@ -1,7 +1,7 @@
 package conveyor
 
-// // FetchHandler interface binds to nodes that have the capability to fetch intermidiate data, and forward it to next node
-// type FetchHandler interface {
+// // FetchExecutor interface binds to nodes that have the capability to fetch intermidiate data, and forward it to next node
+// type FetchExecutor interface {
 // 	FetchAndSend(inputChannel chan interface{}, outputChannel []chan interface{})
 // 	Start()
 // 	Stop()
@@ -22,14 +22,14 @@ type FetchNode struct {
 }
 
 // NewFetchWorkerPool creates a new FetchWorkerPool
-func NewFetchWorkerPool(name string, handler NodeHandler, buffer int) NodeWorker {
+func NewFetchWorkerPool(name string, executor NodeExecutor, buffer int) NodeWorker {
 
 	fwp := &FetchWorkerPool{
 		ConcreteNodeWorker: ConcreteNodeWorker{
 			WPool: WPool{
 				Name: name,
 			},
-			Handler: handler,
+			Executor: executor,
 		},
 	}
 
@@ -61,11 +61,11 @@ func (fwp *FetchWorkerPool) SetOutputChannel(outChan chan map[string]interface{}
 
 // Start FetchWorkerPool
 func (fwp *FetchWorkerPool) Start(ctx *CnvContext) error {
-	for i := 0; i < fwp.Handler.Count(); i++ {
+	for i := 0; i < fwp.Executor.Count(); i++ {
 		fwp.Wg.Add(1)
 		go func() {
 			defer fwp.Wg.Done()
-			fwp.Handler.Execute(ctx, fwp.inputChannel, fwp.outputChannel)
+			fwp.Executor.Execute(ctx, fwp.inputChannel, fwp.outputChannel)
 		}()
 	}
 	return nil

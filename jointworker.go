@@ -2,8 +2,8 @@ package conveyor
 
 import "log"
 
-// // FetchHandler interface binds to nodes that have the capability to fetch intermidiate data, and forward it to next node
-// type FetchHandler interface {
+// // FetchExecutor interface binds to nodes that have the capability to fetch intermidiate data, and forward it to next node
+// type FetchExecutor interface {
 // 	FetchAndSend(inputChannel chan interface{}, outputChannel []chan interface{})
 // 	Start()
 // 	Stop()
@@ -19,17 +19,17 @@ type JointWorkerPool struct {
 }
 
 // NewJointWorkerPool creates a new FetchWorkerPool
-func NewJointWorkerPool(name string, handler JointHandler, buffer int) JointWorker {
+func NewJointWorkerPool(name string, executor JointExecutor, buffer int) JointWorker {
 	jwp := &JointWorkerPool{
 		ConcreteJointWorker: ConcreteJointWorker{
 			WPool: WPool{
 				Name: name,
 			},
-			Handler: handler,
+			Executor: executor,
 		},
 	}
 
-	for i := 0; i < jwp.Handler.InputCount(); i++ {
+	for i := 0; i < jwp.Executor.InputCount(); i++ {
 		jwp.inputChannels = append(jwp.inputChannels, make(chan map[string]interface{}, buffer))
 	}
 
@@ -72,12 +72,12 @@ func (jwp *JointWorkerPool) AddOutputChannel(outChan chan map[string]interface{}
 
 // Start JoinWorkerPool
 func (jwp *JointWorkerPool) Start(ctx *CnvContext) error {
-	for i := 0; i < jwp.Handler.Count(); i++ {
+	for i := 0; i < jwp.Executor.Count(); i++ {
 		jwp.Wg.Add(1)
 		go func() {
 			defer jwp.Wg.Done()
-			if err := jwp.Handler.Execute(ctx, jwp.inputChannels, jwp.outputChannels); err != nil {
-				log.Println("join handler start failed", err)
+			if err := jwp.Executor.Execute(ctx, jwp.inputChannels, jwp.outputChannels); err != nil {
+				log.Println("join executor start failed", err)
 				return
 			}
 		}()

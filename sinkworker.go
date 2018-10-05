@@ -7,14 +7,14 @@ type SinkWorkerPool struct {
 }
 
 // NewSinkWorkerPool creates a new SinkWorkerPool
-func NewSinkWorkerPool(name string, handler NodeHandler, buffer int) NodeWorker {
+func NewSinkWorkerPool(name string, executor NodeExecutor, buffer int) NodeWorker {
 
 	swp := &SinkWorkerPool{
 		ConcreteNodeWorker: ConcreteNodeWorker{
 			WPool: WPool{
 				Name: name,
 			},
-			Handler: handler,
+			Executor: executor,
 		},
 	}
 
@@ -25,12 +25,12 @@ func NewSinkWorkerPool(name string, handler NodeHandler, buffer int) NodeWorker 
 
 // Start SinkWorkerPool
 func (swp *SinkWorkerPool) Start(ctx *CnvContext) error {
-	for i := 0; i < swp.Handler.Count(); i++ {
+	for i := 0; i < swp.Executor.Count(); i++ {
 		swp.Wg.Add(1)
 
 		go func() {
 			defer swp.Wg.Done()
-			swp.Handler.Execute(ctx, swp.inputChannel, nil)
+			swp.Executor.Execute(ctx, swp.inputChannel, nil)
 		}()
 	}
 	return nil

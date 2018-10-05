@@ -31,9 +31,14 @@ type Conveyor struct {
 	// SinkNodes  []NodeWorker
 }
 
-// Status returns a channel on which ConveyorStatuses will be published
+// Status returns a channel on which Conveyor Statuses will be published
 func (cnv *Conveyor) Status() <-chan string {
 	return cnv.ctx.Data.status
+}
+
+// Done returns the context.Done() channel of Conveyor
+func (cnv *Conveyor) Done() <-chan struct{} {
+	return cnv.ctx.Done()
 }
 
 // Progress returns a channel which is regularly updated with progress %

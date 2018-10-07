@@ -8,12 +8,12 @@ type SourceWorkerPool struct {
 }
 
 // NewSourceWorkerPool creates a new SourceWorkerPool
-func NewSourceWorkerPool(name string, executor NodeExecutor, buffer int) NodeWorker {
+func NewSourceWorkerPool(executor NodeExecutor) NodeWorker {
 
 	swp := &SourceWorkerPool{
 		ConcreteNodeWorker: ConcreteNodeWorker{
 			WPool: WPool{
-				Name: name,
+				Name: executor.GetName() + "_worker",
 			},
 			Executor: executor,
 		},
@@ -64,6 +64,7 @@ func (swp *SourceWorkerPool) WorkerType() string {
 // WaitAndStop SourceWorkerPool
 func (swp *SourceWorkerPool) WaitAndStop() error {
 	swp.Wg.Wait()
+	swp.Executor.CleanUp()
 	close(swp.outputChannel)
 	return nil
 }

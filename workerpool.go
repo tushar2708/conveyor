@@ -47,6 +47,7 @@ type ConcreteJointWorker struct {
 type NodeWorker interface {
 	Start(ctx *CnvContext) error
 	WaitAndStop() error
+	CreateChannels(int)
 	WorkerType() string
 	SetInputChannel(chan map[string]interface{}) error
 	SetOutputChannel(chan map[string]interface{}) error
@@ -58,6 +59,7 @@ type NodeWorker interface {
 type JointWorker interface {
 	Start(ctx *CnvContext) error
 	WaitAndStop() error
+	CreateChannels(int)
 	SetInputChannels([]chan map[string]interface{}) error
 	SetOutputChannels([]chan map[string]interface{}) error
 	GetInputChannels() ([]chan map[string]interface{}, error)
@@ -73,6 +75,9 @@ func (wp *ConcreteNodeWorker) Start() {
 		go wp.run()
 	}
 }
+
+// CreateChannels creates channels for the worker
+func (wp *ConcreteNodeWorker) CreateChannels(buffer int) {}
 
 // Start the worker
 func (wp *ConcreteJointWorker) Start() {

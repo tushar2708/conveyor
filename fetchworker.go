@@ -22,19 +22,23 @@ type FetchNode struct {
 }
 
 // NewFetchWorkerPool creates a new FetchWorkerPool
-func NewFetchWorkerPool(name string, executor NodeExecutor, buffer int) NodeWorker {
+func NewFetchWorkerPool(executor NodeExecutor) NodeWorker {
 
 	fwp := &FetchWorkerPool{
 		ConcreteNodeWorker: ConcreteNodeWorker{
 			WPool: WPool{
-				Name: name,
+				Name: executor.GetName() + "_worker",
 			},
 			Executor: executor,
 		},
 	}
 
-	fwp.inputChannel = make(chan map[string]interface{}, buffer)
 	return fwp
+}
+
+// CreateChannels creates channels for the fetch worker
+func (fwp *FetchWorkerPool) CreateChannels(buffer int) {
+	fwp.inputChannel = make(chan map[string]interface{}, buffer)
 }
 
 // GetInputChannel returns the input channel of Fetch WorkerPool
@@ -79,6 +83,7 @@ func (fwp *FetchWorkerPool) WorkerType() string {
 // WaitAndStop FetchWorkerPool
 func (fwp *FetchWorkerPool) WaitAndStop() error {
 	fwp.Wg.Wait()
+	fwp.Executor.CleanUp()
 	close(fwp.outputChannel)
 	return nil
 }

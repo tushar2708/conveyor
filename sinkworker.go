@@ -7,20 +7,23 @@ type SinkWorkerPool struct {
 }
 
 // NewSinkWorkerPool creates a new SinkWorkerPool
-func NewSinkWorkerPool(name string, executor NodeExecutor, buffer int) NodeWorker {
+func NewSinkWorkerPool(executor NodeExecutor) NodeWorker {
 
 	swp := &SinkWorkerPool{
 		ConcreteNodeWorker: ConcreteNodeWorker{
 			WPool: WPool{
-				Name: name,
+				Name: executor.GetName() + "_worker",
 			},
 			Executor: executor,
 		},
 	}
 
-	swp.inputChannel = make(chan map[string]interface{}, buffer)
-
 	return swp
+}
+
+// CreateChannels creates channels for the sink worker
+func (swp *SinkWorkerPool) CreateChannels(buffer int) {
+	swp.inputChannel = make(chan map[string]interface{}, buffer)
 }
 
 // Start SinkWorkerPool
@@ -65,5 +68,6 @@ func (swp *SinkWorkerPool) WorkerType() string {
 // WaitAndStop SinkWorkerPool
 func (swp *SinkWorkerPool) WaitAndStop() error {
 	swp.Wg.Wait()
+	swp.Executor.CleanUp()
 	return nil
 }

@@ -19,21 +19,24 @@ type JointWorkerPool struct {
 }
 
 // NewJointWorkerPool creates a new FetchWorkerPool
-func NewJointWorkerPool(name string, executor JointExecutor, buffer int) JointWorker {
+func NewJointWorkerPool(executor JointExecutor) JointWorker {
 	jwp := &JointWorkerPool{
 		ConcreteJointWorker: ConcreteJointWorker{
 			WPool: WPool{
-				Name: name,
+				Name: executor.GetName() + "_worker",
 			},
 			Executor: executor,
 		},
 	}
 
+	return jwp
+}
+
+// CreateChannels creates channels for the joint worker
+func (jwp *JointWorkerPool) CreateChannels(buffer int) {
 	for i := 0; i < jwp.Executor.InputCount(); i++ {
 		jwp.inputChannels = append(jwp.inputChannels, make(chan map[string]interface{}, buffer))
 	}
-
-	return jwp
 }
 
 // GetInputChannels returns the input channel of Fetch WorkerPool

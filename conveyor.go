@@ -16,8 +16,11 @@ type Message struct {
 
 // Conveyor to run the graph
 type Conveyor struct {
-	Name string
-	ctx  *CnvContext
+	Name         string
+	ctx          *CnvContext
+	needProgress bool
+	tickProgress time.Duration
+	bufferLen    int
 
 	progress         chan float64
 	duration         time.Duration
@@ -25,6 +28,8 @@ type Conveyor struct {
 
 	workers []NodeWorker
 	joints  []JointWorker
+
+	cleanupOnce sync.Once
 
 	// SourceNode NodeWorker
 	// InnerNodes []NodeWorker
@@ -55,10 +60,43 @@ var (
 )
 
 // New creates a new Conveyor instance
-func New(name string, expectedDuration time.Duration) (*Conveyor, error) {
+func New(name string, bufferLen int) (*Conveyor, error) {
+
+	conveyor, err := newConveyor(name, bufferLen, -1)
+	conveyor.needProgress = false
+
+	return conveyor, err
+}
+
+// NewTimeout creates a new Conveyor instance with specified timeout
+func NewTimeout(name string, bufferLen int, timeout time.Duration) (*Conveyor, error) {
+
+	conveyor, err := newConveyor(name, bufferLen, timeout)
+	conveyor.needProgress = false
+
+	return conveyor, err
+}
+
+// NewTimeoutAndProgress creates a new Conveyor instance
+func NewTimeoutAndProgress(name string, bufferLen int, timeout, expectedDuration time.Duration) (*Conveyor, error) {
 
 	if expectedDuration == 0 {
 		expectedDuration = time.Hour
+	}
+
+	conveyor, err := newConveyor(name, bufferLen, timeout)
+
+	conveyor.needProgress = true
+	conveyor.expectedDuration = expectedDuration
+	conveyor.tickProgress = time.Millisecond * 500
+
+	return conveyor, err
+}
+
+func newConveyor(name string, bufferLen int, timeout time.Duration) (*Conveyor, error) {
+
+	if bufferLen <= 0 {
+		bufferLen = 100
 	}
 
 	_ctx := &CnvContext{
@@ -69,15 +107,19 @@ func New(name string, expectedDuration time.Duration) (*Conveyor, error) {
 			status: make(chan string, 1),
 		},
 	}
-	ctx, cancel := _ctx.WithCancel()
-	ctx.Data.cancelProgress = cancel
+	var ctx *CnvContext
+	if timeout <= 0 {
+		ctx = _ctx.WithCancel()
+	} else {
+		ctx = _ctx.WithTimeout(timeout)
+	}
 
 	cnv := &Conveyor{
-		Name:             name,
-		expectedDuration: expectedDuration,
-		progress:         make(chan float64, 1),
-		ctx:              ctx,
+		Name:      name,
+		bufferLen: bufferLen,
+		ctx:       ctx,
 	}
+
 	return cnv, nil
 }
 
@@ -93,7 +135,7 @@ func (cnv *Conveyor) GetLastWorker() (NodeWorker, error) {
 
 // AddWorker employs a new worker station to the conveyor
 func (cnv *Conveyor) AddWorker(worker NodeWorker, toLink bool) error {
-
+	worker.CreateChannels(cnv.bufferLen)
 	cnv.workers = append(cnv.workers, worker)
 
 	workerCount := len(cnv.workers)
@@ -112,6 +154,7 @@ func (cnv *Conveyor) AddWorker(worker NodeWorker, toLink bool) error {
 // AddJointWorker employs a new joint station to the conveyor
 func (cnv *Conveyor) AddJointWorker(joint JointWorker) error {
 
+	joint.CreateChannels(cnv.bufferLen)
 	cnv.joints = append(cnv.joints, joint)
 
 	return nil
@@ -121,6 +164,10 @@ func (cnv *Conveyor) AddJointWorker(joint JointWorker) error {
 func (cnv *Conveyor) Start() error {
 
 	wg := sync.WaitGroup{}
+
+	if cnv.needProgress {
+		go cnv.updateProgress()
+	}
 
 	for _, nodeWorker := range cnv.workers {
 		wg.Add(1)
@@ -157,20 +204,38 @@ func (cnv *Conveyor) Start() error {
 	// wait for the conveyor to finish
 	wg.Wait()
 
+	cnv.cleanup() // Cleanup() will be called from here, in case of success or timeout
+
 	return nil
 }
 
 // Stop Conveyor by cancelling context. It's used to kill a campaign while it's running.
 // No need to call it if campaign is finishing on it's own
-func (cnv *Conveyor) Stop() error {
+func (cnv *Conveyor) Stop() {
 	// Cancel ctx
-	cnv.ctx.Data.cancelProgress()
-	return nil
+	cnv.cleanup() // cleanup() will be called from here, in case of killing conveyor
 }
 
-func (cnv *Conveyor) updateProgress(ctx context.Context, ticker *time.Ticker) {
+// cleanup should be called in all the termination cases: success, kill, & timeout
+func (cnv *Conveyor) cleanup() {
+	// In case, conveyor was killed, ctx.Cancel() night have been already called, but it's an idempotent method
+	cnv.ctx.Cancel()
+	if cnv.needProgress {
+		cnv.cleanupOnce.Do(func() {
+			close(cnv.progress)
+		})
+	}
+}
+
+func (cnv *Conveyor) updateProgress() {
+
 	start := time.Now()
-loop:
+	cnv.progress = make(chan float64, 1)
+	defer close(cnv.progress)
+
+	ticker := time.NewTicker(cnv.tickProgress)
+	defer ticker.Stop()
+trackProgress:
 	for range ticker.C {
 		cnv.duration = time.Since(start)
 
@@ -181,14 +246,16 @@ loop:
 		}
 
 		select {
-		case <-ctx.Done(): // add a timeout context
-			break loop
+		case <-cnv.ctx.Done():
+			break trackProgress
+
 		case cnv.progress <- percentDone:
 		default:
 			<-cnv.progress
 			cnv.progress <- percentDone
 		}
 	}
+
 }
 
 // CtxData stores the information that is stored inside a conveyor, useful for it's lifecycle.ConveyorData
@@ -207,15 +274,51 @@ type CtxData struct {
 // To avoid sacrificing type checking with context.WithValue() wherever it's not needed
 type CnvContext struct {
 	context.Context
-	Data CtxData
+
+	cancelOnce sync.Once
+	Data       CtxData
 }
 
 // WithCancel is a wrapper on context.WithCancel() for CnvContext type,
 // that also copies the Data to new context
-func (ctx *CnvContext) WithCancel() (*CnvContext, func()) {
+func (ctx *CnvContext) WithCancel() *CnvContext {
 	newctx, cancel := context.WithCancel(ctx.Context)
-	return &CnvContext{
+	cnvContext := &CnvContext{
 		Context: newctx,
 		Data:    ctx.Data,
-	}, cancel
+	}
+	cnvContext.Data.cancelProgress = cancel
+
+	return cnvContext
+}
+
+// WithTimeout is a wrapper on context.WithTimeout() for CnvContext type,
+// that also copies the Data to new context
+func (ctx *CnvContext) WithTimeout(timeout time.Duration) *CnvContext {
+	newctx, cancel := context.WithTimeout(ctx.Context, timeout)
+	cnvContext := &CnvContext{
+		Context: newctx,
+		Data:    ctx.Data,
+	}
+	cnvContext.Data.cancelProgress = cancel
+
+	return cnvContext
+}
+
+// Cancel the derived context, along with closing internal channels
+// It has been made to follow the "non-panic multiple cancel" behaviour of built-in context
+func (ctx *CnvContext) Cancel() {
+	if ctx.Data.cancelProgress != nil {
+		ctx.Data.cancelProgress()
+
+		ctx.cancelOnce.Do(func() {
+			if ctx.Data.logs != nil {
+				close(ctx.Data.logs)
+			}
+
+			if ctx.Data.logs != nil {
+				close(ctx.Data.status)
+			}
+		})
+	}
 }

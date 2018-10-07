@@ -173,12 +173,12 @@ func (cnv *Conveyor) Start() error {
 		wg.Add(1)
 		go func(nodeWorker NodeWorker) {
 			defer wg.Done()
-			if err := nodeWorker.StartLoopMode(cnv.ctx); err != nil {
+			if err := nodeWorker.Start(cnv.ctx); err != nil {
 				log.Println("node worker start failed", err)
 				return
 			}
 
-			if err := nodeWorker.WaitAndStop(); err != nil {
+			if err := nodeWorker.WaitAndStop(cnv.ctx); err != nil {
 				log.Println("node worker stop failed", err)
 			}
 		}(nodeWorker)

@@ -5,7 +5,7 @@ import "errors"
 // NodeExecutor interface binds to nodes that have the capability to fetch intermidiate data, and forward it to next node
 type NodeExecutor interface {
 	GetName() string
-	ExecuteLoop(ctx *CnvContext, inChan <-chan map[string]interface{}, outChan chan<- map[string]interface{})
+	ExecuteLoop(ctx *CnvContext, inChan <-chan map[string]interface{}, outChan chan<- map[string]interface{}) error
 	Execute(ctx *CnvContext, inData map[string]interface{}) (map[string]interface{}, error)
 	Count() int
 	CleanUp() error
@@ -30,6 +30,9 @@ var (
 
 	// ErrExecuteNotImplemented error
 	ErrExecuteNotImplemented = errors.New("This executor doesn't implement Execute() method")
+
+	// ErrInvalidWorkerMode error
+	ErrInvalidWorkerMode = errors.New("Invalid worker mode. pick either conveyor.WorkerModeTransaction or conveyor.WorkerModeLoop")
 
 	// ErrExecuteLoopNotImplemented error
 	ErrExecuteLoopNotImplemented = errors.New("This executor doesn't implement ExecuteLoop() method")

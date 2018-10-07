@@ -56,7 +56,7 @@ func (cnv *Conveyor) Logs() <-chan Message {
 
 var (
 	// ErrEmptyConveyor error
-	ErrEmptyConveyor = errors.New("conveyor is emty, no workers employed")
+	ErrEmptyConveyor = errors.New("conveyor is empty, no workers employed")
 )
 
 // New creates a new Conveyor instance
@@ -173,7 +173,7 @@ func (cnv *Conveyor) Start() error {
 		wg.Add(1)
 		go func(nodeWorker NodeWorker) {
 			defer wg.Done()
-			if err := nodeWorker.Start(cnv.ctx); err != nil {
+			if err := nodeWorker.StartLoopMode(cnv.ctx); err != nil {
 				log.Println("node worker start failed", err)
 				return
 			}
@@ -231,7 +231,6 @@ func (cnv *Conveyor) updateProgress() {
 
 	start := time.Now()
 	cnv.progress = make(chan float64, 1)
-	defer close(cnv.progress)
 
 	ticker := time.NewTicker(cnv.tickProgress)
 	defer ticker.Stop()
@@ -240,15 +239,20 @@ trackProgress:
 		cnv.duration = time.Since(start)
 
 		percentDone := float64((cnv.duration.Seconds() / cnv.expectedDuration.Seconds()) * 100)
-		// if estimate is incorrect don't overflow progress end
+		// if estimate is incorrect, don't overflow progress end
 		if percentDone > 100 {
 			percentDone = 99.0
 		}
 
+		// Seperated out, contex closed check, as in the next check, "default" is always picked.
+		// Even if ctx is done, and "cleanup()" function above, has closed "cnv.progress"
 		select {
 		case <-cnv.ctx.Done():
 			break trackProgress
+		default:
+		}
 
+		select {
 		case cnv.progress <- percentDone:
 		default:
 			<-cnv.progress

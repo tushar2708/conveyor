@@ -44,13 +44,13 @@ func (swp *SourceWorkerPool) SetOutputChannel(outChan chan map[string]interface{
 	return nil
 }
 
-// Start SourceWorkerPool
-func (swp *SourceWorkerPool) Start(ctx *CnvContext) error {
+// StartLoopMode SourceWorkerPool
+func (swp *SourceWorkerPool) StartLoopMode(ctx *CnvContext) error {
 	for i := 0; i < swp.Executor.Count(); i++ {
 		swp.Wg.Add(1)
 		go func() {
 			defer swp.Wg.Done()
-			swp.Executor.Execute(ctx, nil, swp.outputChannel)
+			swp.Executor.ExecuteLoop(ctx, nil, swp.outputChannel)
 		}()
 	}
 	return nil

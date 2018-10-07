@@ -26,14 +26,14 @@ func (swp *SinkWorkerPool) CreateChannels(buffer int) {
 	swp.inputChannel = make(chan map[string]interface{}, buffer)
 }
 
-// Start SinkWorkerPool
-func (swp *SinkWorkerPool) Start(ctx *CnvContext) error {
+// StartLoopMode SinkWorkerPool
+func (swp *SinkWorkerPool) StartLoopMode(ctx *CnvContext) error {
 	for i := 0; i < swp.Executor.Count(); i++ {
 		swp.Wg.Add(1)
 
 		go func() {
 			defer swp.Wg.Done()
-			swp.Executor.Execute(ctx, swp.inputChannel, nil)
+			swp.Executor.ExecuteLoop(ctx, swp.inputChannel, nil)
 		}()
 	}
 	return nil

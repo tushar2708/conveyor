@@ -63,13 +63,13 @@ func (fwp *FetchWorkerPool) SetOutputChannel(outChan chan map[string]interface{}
 	return nil
 }
 
-// Start FetchWorkerPool
-func (fwp *FetchWorkerPool) Start(ctx *CnvContext) error {
+// StartLoopMode FetchWorkerPool
+func (fwp *FetchWorkerPool) StartLoopMode(ctx *CnvContext) error {
 	for i := 0; i < fwp.Executor.Count(); i++ {
 		fwp.Wg.Add(1)
 		go func() {
 			defer fwp.Wg.Done()
-			fwp.Executor.Execute(ctx, fwp.inputChannel, fwp.outputChannel)
+			fwp.Executor.ExecuteLoop(ctx, fwp.inputChannel, fwp.outputChannel)
 		}()
 	}
 	return nil

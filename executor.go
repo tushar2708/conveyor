@@ -1,9 +1,12 @@
 package conveyor
 
+import "errors"
+
 // NodeExecutor interface binds to nodes that have the capability to fetch intermidiate data, and forward it to next node
 type NodeExecutor interface {
 	GetName() string
-	Execute(ctx *CnvContext, inChan <-chan map[string]interface{}, outChan chan<- map[string]interface{})
+	ExecuteLoop(ctx *CnvContext, inChan <-chan map[string]interface{}, outChan chan<- map[string]interface{})
+	Execute(ctx *CnvContext, inData map[string]interface{}) (map[string]interface{}, error)
 	Count() int
 	CleanUp() error
 }
@@ -22,6 +25,30 @@ type ConcreteNodeExecutor struct {
 	Name string
 	Data interface{}
 }
+
+var (
+
+	// ErrExecuteNotImplemented error
+	ErrExecuteNotImplemented = errors.New("This executor doesn't implement Execute() method")
+
+	// ErrExecuteLoopNotImplemented error
+	ErrExecuteLoopNotImplemented = errors.New("This executor doesn't implement ExecuteLoop() method")
+
+	// ErrSourceExhausted error
+	ErrSourceExhausted = errors.New("Source executor is exhausted")
+	// ErrSourceInternal error
+	ErrSourceInternal = errors.New("Source executor internal error")
+
+	// ErrFetchRejected error
+	ErrFetchRejected = errors.New("Fetch executor rejected the transaction")
+	// ErrFetchInternal error
+	ErrFetchInternal = errors.New("Fetch executor internal error")
+
+	// ErrSinkRejected error
+	ErrSinkRejected = errors.New("Sink executor rejected data")
+	// ErrSinkInternal error
+	ErrSinkInternal = errors.New("Sink executor internal error")
+)
 
 // Count returns the number of executors required
 func (cnh *ConcreteNodeExecutor) Count() int {

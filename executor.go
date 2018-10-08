@@ -1,9 +1,16 @@
 package conveyor
 
+import (
+	"errors"
+	"fmt"
+)
+
 // NodeExecutor interface binds to nodes that have the capability to fetch intermidiate data, and forward it to next node
 type NodeExecutor interface {
 	GetName() string
-	Execute(ctx *CnvContext, inChan <-chan map[string]interface{}, outChan chan<- map[string]interface{})
+	GetUniqueIdentifier() string
+	ExecuteLoop(ctx *CnvContext, inChan <-chan map[string]interface{}, outChan chan<- map[string]interface{}) error
+	Execute(ctx *CnvContext, inData map[string]interface{}) (map[string]interface{}, error)
 	Count() int
 	CleanUp() error
 }
@@ -21,6 +28,38 @@ type JointExecutor interface {
 type ConcreteNodeExecutor struct {
 	Name string
 	Data interface{}
+}
+
+var (
+
+	// ErrExecuteNotImplemented error
+	ErrExecuteNotImplemented = errors.New("This executor doesn't implement Execute() method")
+
+	// ErrInvalidWorkerMode error
+	ErrInvalidWorkerMode = errors.New("Invalid worker mode. pick either conveyor.WorkerModeTransaction or conveyor.WorkerModeLoop")
+
+	// ErrExecuteLoopNotImplemented error
+	ErrExecuteLoopNotImplemented = errors.New("This executor doesn't implement ExecuteLoop() method")
+
+	// ErrSourceExhausted error
+	ErrSourceExhausted = errors.New("Source executor is exhausted")
+	// ErrSourceInternal error
+	ErrSourceInternal = errors.New("Source executor internal error")
+
+	// ErrFetchRejected error
+	ErrFetchRejected = errors.New("Fetch executor rejected the transaction")
+	// ErrFetchInternal error
+	ErrFetchInternal = errors.New("Fetch executor internal error")
+
+	// ErrSinkRejected error
+	ErrSinkRejected = errors.New("Sink executor rejected data")
+	// ErrSinkInternal error
+	ErrSinkInternal = errors.New("Sink executor internal error")
+)
+
+// GetUniqueIdentifier can be used to fetch a unique string identifying the executor
+func (cnh *ConcreteNodeExecutor) GetUniqueIdentifier() string {
+	return fmt.Sprintf("%s", cnh.Name)
 }
 
 // Count returns the number of executors required

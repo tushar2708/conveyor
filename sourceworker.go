@@ -1,5 +1,12 @@
 package conveyor
 
+import (
+	"fmt"
+	"log"
+
+	"golang.org/x/sync/semaphore"
+)
+
 // SourceWorkerPool struct provides the worker pool infra for Source interface
 type SourceWorkerPool struct {
 	ConcreteNodeWorker
@@ -8,14 +15,21 @@ type SourceWorkerPool struct {
 }
 
 // NewSourceWorkerPool creates a new SourceWorkerPool
-func NewSourceWorkerPool(executor NodeExecutor) NodeWorker {
+func NewSourceWorkerPool(executor NodeExecutor, mode WorkerMode) NodeWorker {
+
+	wCnt := executor.Count()
+	if wCnt < 1 {
+		wCnt = 1
+	}
 
 	swp := &SourceWorkerPool{
 		ConcreteNodeWorker: ConcreteNodeWorker{
 			WPool: WPool{
 				Name: executor.GetName() + "_worker",
 			},
-			Executor: executor,
+			WorkerCount: wCnt,
+			Mode:        mode,
+			Executor:    executor,
 		},
 	}
 
@@ -44,15 +58,79 @@ func (swp *SourceWorkerPool) SetOutputChannel(outChan chan map[string]interface{
 	return nil
 }
 
-// Start SourceWorkerPool
+// Start Source Worker Pool
 func (swp *SourceWorkerPool) Start(ctx *CnvContext) error {
-	for i := 0; i < swp.Executor.Count(); i++ {
+	if swp.Mode == WorkerModeTransaction {
+		return swp.startTransactionMode(ctx)
+	} else if swp.Mode == WorkerModeLoop {
+		return swp.startLoopMode(ctx)
+	} else {
+		return ErrInvalidWorkerMode
+	}
+}
+
+// startLoopMode SourceWorkerPool
+func (swp *SourceWorkerPool) startLoopMode(ctx *CnvContext) error {
+
+	for i := 0; i < swp.WorkerCount; i++ {
 		swp.Wg.Add(1)
 		go func() {
 			defer swp.Wg.Done()
-			swp.Executor.Execute(ctx, nil, swp.outputChannel)
+			if err := swp.Executor.ExecuteLoop(ctx, nil, swp.outputChannel); err != nil {
+				if err == ErrExecuteLoopNotImplemented {
+					ctx.SendLog(3, fmt.Sprintf("Executor:[%s] ", swp.Executor.GetUniqueIdentifier()), err)
+
+					log.Fatalf("Improper setup of Executor[%s], ExecuteLoop() method is required", swp.Executor.GetName())
+				} else {
+					return
+				}
+			}
 		}()
 	}
+	return nil
+}
+
+// startTransactionMode starts SourceWorkerPool in transaction mode
+func (swp *SourceWorkerPool) startTransactionMode(ctx *CnvContext) error {
+
+	swp.sem = semaphore.NewWeighted(int64(swp.WorkerCount))
+
+workerLoop:
+	for {
+
+		select {
+		case <-ctx.Done():
+			break workerLoop
+		default:
+		}
+
+		if err := swp.sem.Acquire(ctx, 1); err != nil {
+			ctx.SendLog(3, fmt.Sprintf("Worker:[%s] for Executor:[%s] Failed to acquire semaphore", swp.Name, swp.Executor.GetUniqueIdentifier()), err)
+			break workerLoop
+		}
+
+		go func() {
+			defer swp.sem.Release(1)
+			out, err := swp.Executor.Execute(ctx, nil)
+			if err == nil {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+				swp.outputChannel <- out
+			} else if err == ErrExecuteNotImplemented {
+				ctx.SendLog(3, fmt.Sprintf("Executor:[%s]", swp.Executor.GetUniqueIdentifier()), err)
+				log.Fatalf("Improper setup of Executor[%s], Execute() method is required", swp.Executor.GetUniqueIdentifier())
+			} else if err == ErrSourceExhausted {
+				ctx.SendLog(3, fmt.Sprintf("Executor:[%s]", swp.Executor.GetUniqueIdentifier()), err)
+				return
+			}
+			return
+		}()
+
+	}
+
 	return nil
 }
 
@@ -62,8 +140,21 @@ func (swp *SourceWorkerPool) WorkerType() string {
 }
 
 // WaitAndStop SourceWorkerPool
-func (swp *SourceWorkerPool) WaitAndStop() error {
-	swp.Wg.Wait()
+func (swp *SourceWorkerPool) WaitAndStop(ctx *CnvContext) error {
+
+	select {
+	case <-ctx.Done():
+		return nil
+	default:
+	}
+
+	if swp.Mode == WorkerModeTransaction {
+		if err := swp.sem.Acquire(ctx, int64(swp.WorkerCount)); err != nil {
+			ctx.SendLog(3, fmt.Sprintf("Worker:[%s] for Executor:[%s] Failed to acquire semaphore", swp.Name, swp.Executor.GetUniqueIdentifier()), err)
+		}
+	} else {
+		swp.Wg.Wait()
+	}
 	swp.Executor.CleanUp()
 	close(swp.outputChannel)
 	return nil

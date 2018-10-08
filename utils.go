@@ -2,33 +2,6 @@ package conveyor
 
 import "errors"
 
-func sendStatus(ctx *CnvContext, status string) error {
-
-	select {
-	case <-ctx.Done():
-		return nil
-	case ctx.Data.status <- status:
-	default:
-		<-ctx.Data.status // If not consumed, throw away old status and update with new value
-		ctx.Data.status <- status
-	}
-	return nil
-}
-
-func sendLogs(ctx *CnvContext, text string, err error) error {
-
-	logEntry := Message{Text: text, Err: err}
-
-	select {
-	case <-ctx.Done():
-		return nil
-	case ctx.Data.logs <- logEntry:
-	default:
-		ctx.Data.logs <- logEntry
-	}
-	return nil
-}
-
 // LinkWorker2Worker links two NodeWorkers, maps input channel of a b on output channel of a
 func LinkWorker2Worker(a NodeWorker, b NodeWorker) error {
 	ch, err := b.GetInputChannel()

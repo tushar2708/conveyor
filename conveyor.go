@@ -8,12 +8,6 @@ import (
 	"time"
 )
 
-// Message struct stores one unit of message that conveyor passed back for logging
-type Message struct {
-	Err  error
-	Text string
-}
-
 // Conveyor to run the graph
 type Conveyor struct {
 	Name         string
@@ -47,7 +41,12 @@ func (cnv *Conveyor) Done() <-chan struct{} {
 }
 
 // Progress returns a channel which is regularly updated with progress %
-func (cnv *Conveyor) Progress() <-chan float64 { return cnv.progress }
+func (cnv *Conveyor) Progress() <-chan float64 {
+	if cnv.needProgress {
+		return cnv.progress
+	}
+	return nil
+}
 
 // Logs returns a channel on which Conveyor Statuses will be published
 func (cnv *Conveyor) Logs() <-chan Message {
@@ -56,7 +55,7 @@ func (cnv *Conveyor) Logs() <-chan Message {
 
 var (
 	// ErrEmptyConveyor error
-	ErrEmptyConveyor = errors.New("conveyor is emty, no workers employed")
+	ErrEmptyConveyor = errors.New("conveyor is empty, no workers employed")
 )
 
 // New creates a new Conveyor instance
@@ -178,7 +177,7 @@ func (cnv *Conveyor) Start() error {
 				return
 			}
 
-			if err := nodeWorker.WaitAndStop(); err != nil {
+			if err := nodeWorker.WaitAndStop(cnv.ctx); err != nil {
 				log.Println("node worker stop failed", err)
 			}
 		}(nodeWorker)
@@ -211,9 +210,10 @@ func (cnv *Conveyor) Start() error {
 
 // Stop Conveyor by cancelling context. It's used to kill a campaign while it's running.
 // No need to call it if campaign is finishing on it's own
-func (cnv *Conveyor) Stop() {
+func (cnv *Conveyor) Stop() time.Duration {
 	// Cancel ctx
 	cnv.cleanup() // cleanup() will be called from here, in case of killing conveyor
+	return cnv.duration
 }
 
 // cleanup should be called in all the termination cases: success, kill, & timeout
@@ -231,7 +231,6 @@ func (cnv *Conveyor) updateProgress() {
 
 	start := time.Now()
 	cnv.progress = make(chan float64, 1)
-	defer close(cnv.progress)
 
 	ticker := time.NewTicker(cnv.tickProgress)
 	defer ticker.Stop()
@@ -240,15 +239,20 @@ trackProgress:
 		cnv.duration = time.Since(start)
 
 		percentDone := float64((cnv.duration.Seconds() / cnv.expectedDuration.Seconds()) * 100)
-		// if estimate is incorrect don't overflow progress end
+		// if estimate is incorrect, don't overflow progress end
 		if percentDone > 100 {
 			percentDone = 99.0
 		}
 
+		// Seperated out, contex closed check, as in the next check, "default" is always picked.
+		// Even if ctx is done, and "cleanup()" function above, has closed "cnv.progress"
 		select {
 		case <-cnv.ctx.Done():
 			break trackProgress
+		default:
+		}
 
+		select {
 		case cnv.progress <- percentDone:
 		default:
 			<-cnv.progress
@@ -256,69 +260,4 @@ trackProgress:
 		}
 	}
 
-}
-
-// CtxData stores the information that is stored inside a conveyor, useful for it's lifecycle.ConveyorData
-// Any fields only useful for initialization shouldn't be here
-type CtxData struct {
-	Name string
-
-	logs           chan Message
-	status         chan string
-	cancelProgress context.CancelFunc
-	// cancelAll      context.CancelFunc
-
-}
-
-// CnvContext is a wrapper over context.Context
-// To avoid sacrificing type checking with context.WithValue() wherever it's not needed
-type CnvContext struct {
-	context.Context
-
-	cancelOnce sync.Once
-	Data       CtxData
-}
-
-// WithCancel is a wrapper on context.WithCancel() for CnvContext type,
-// that also copies the Data to new context
-func (ctx *CnvContext) WithCancel() *CnvContext {
-	newctx, cancel := context.WithCancel(ctx.Context)
-	cnvContext := &CnvContext{
-		Context: newctx,
-		Data:    ctx.Data,
-	}
-	cnvContext.Data.cancelProgress = cancel
-
-	return cnvContext
-}
-
-// WithTimeout is a wrapper on context.WithTimeout() for CnvContext type,
-// that also copies the Data to new context
-func (ctx *CnvContext) WithTimeout(timeout time.Duration) *CnvContext {
-	newctx, cancel := context.WithTimeout(ctx.Context, timeout)
-	cnvContext := &CnvContext{
-		Context: newctx,
-		Data:    ctx.Data,
-	}
-	cnvContext.Data.cancelProgress = cancel
-
-	return cnvContext
-}
-
-// Cancel the derived context, along with closing internal channels
-// It has been made to follow the "non-panic multiple cancel" behaviour of built-in context
-func (ctx *CnvContext) Cancel() {
-	if ctx.Data.cancelProgress != nil {
-		ctx.Data.cancelProgress()
-
-		ctx.cancelOnce.Do(func() {
-			if ctx.Data.logs != nil {
-				close(ctx.Data.logs)
-			}
-
-			if ctx.Data.logs != nil {
-				close(ctx.Data.status)
-			}
-		})
-	}
 }

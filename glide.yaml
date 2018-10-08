@@ -1,0 +1,5 @@
+package: hawker/vendor/github.com/tushar2708/conveyor
+import:
+- package: golang.org/x/sync
+  subpackages:
+  - semaphore

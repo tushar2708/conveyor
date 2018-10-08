@@ -1,5 +1,12 @@
 package conveyor
 
+import (
+	"fmt"
+	"log"
+
+	"golang.org/x/sync/semaphore"
+)
+
 // SinkWorkerPool struct provides the worker pool infra for Sink interface
 type SinkWorkerPool struct {
 	ConcreteNodeWorker
@@ -7,14 +14,21 @@ type SinkWorkerPool struct {
 }
 
 // NewSinkWorkerPool creates a new SinkWorkerPool
-func NewSinkWorkerPool(executor NodeExecutor) NodeWorker {
+func NewSinkWorkerPool(executor NodeExecutor, mode WorkerMode) NodeWorker {
+
+	wCnt := executor.Count()
+	if wCnt < 1 {
+		wCnt = 1
+	}
 
 	swp := &SinkWorkerPool{
 		ConcreteNodeWorker: ConcreteNodeWorker{
 			WPool: WPool{
 				Name: executor.GetName() + "_worker",
 			},
-			Executor: executor,
+			WorkerCount: wCnt,
+			Mode:        mode,
+			Executor:    executor,
 		},
 	}
 
@@ -26,16 +40,75 @@ func (swp *SinkWorkerPool) CreateChannels(buffer int) {
 	swp.inputChannel = make(chan map[string]interface{}, buffer)
 }
 
-// Start SinkWorkerPool
+// Start Sink Worker Pool
 func (swp *SinkWorkerPool) Start(ctx *CnvContext) error {
-	for i := 0; i < swp.Executor.Count(); i++ {
+	if swp.Mode == WorkerModeTransaction {
+		return swp.startTransactionMode(ctx)
+	} else if swp.Mode == WorkerModeLoop {
+		return swp.startLoopMode(ctx)
+	} else {
+		return ErrInvalidWorkerMode
+	}
+}
+
+// startLoopMode SinkWorkerPool
+func (swp *SinkWorkerPool) startLoopMode(ctx *CnvContext) error {
+	for i := 0; i < swp.WorkerCount; i++ {
 		swp.Wg.Add(1)
 
 		go func() {
 			defer swp.Wg.Done()
-			swp.Executor.Execute(ctx, swp.inputChannel, nil)
+			swp.Executor.ExecuteLoop(ctx, swp.inputChannel, nil)
+
+			if err := swp.Executor.ExecuteLoop(ctx, swp.inputChannel, nil); err != nil {
+				if err == ErrExecuteLoopNotImplemented {
+					ctx.SendLog(3, fmt.Sprintf("Executor:[%s]", swp.Executor.GetUniqueIdentifier()), err)
+					log.Fatalf("Improper setup of Executor[%s], ExecuteLoop() method is required", swp.Executor.GetUniqueIdentifier())
+				} else {
+					return
+				}
+			}
+
 		}()
 	}
+	return nil
+}
+
+// startTransactionMode starts SourceWorkerPool in transaction mode
+func (swp *SinkWorkerPool) startTransactionMode(ctx *CnvContext) error {
+	sem := semaphore.NewWeighted(int64(swp.WorkerCount))
+
+workerLoop:
+	for {
+
+		select {
+		case <-ctx.Done():
+			break workerLoop
+		default:
+		}
+
+		if err := sem.Acquire(ctx, 1); err != nil {
+			ctx.SendLog(3, fmt.Sprintf("Worker:[%s] for Executor:[%s] Failed to acquire semaphore", swp.Name, swp.Executor.GetUniqueIdentifier()), err)
+			break
+		}
+
+		go func() {
+			defer sem.Release(1)
+			in, ok := <-swp.inputChannel
+			if ok {
+				_, err := swp.Executor.Execute(ctx, in)
+				if err != nil {
+					if err == ErrExecuteNotImplemented {
+						ctx.SendLog(3, fmt.Sprintf("Executor:[%s]", swp.Executor.GetUniqueIdentifier()), err)
+						log.Fatalf("Improper setup of Executor[%s], Execute() method is required", swp.Executor.GetUniqueIdentifier())
+					}
+				}
+			}
+			return
+		}()
+
+	}
+
 	return nil
 }
 
@@ -66,8 +139,22 @@ func (swp *SinkWorkerPool) WorkerType() string {
 }
 
 // WaitAndStop SinkWorkerPool
-func (swp *SinkWorkerPool) WaitAndStop() error {
-	swp.Wg.Wait()
+func (swp *SinkWorkerPool) WaitAndStop(ctx *CnvContext) error {
+
+	select {
+	case <-ctx.Done():
+		return nil
+	default:
+	}
+
+	if swp.Mode == WorkerModeTransaction {
+		if err := swp.sem.Acquire(ctx, int64(swp.WorkerCount)); err != nil {
+			ctx.SendLog(3, fmt.Sprintf("Worker:[%s] for Executor:[%s] Failed to acquire semaphore", swp.Name, swp.Executor.GetUniqueIdentifier()), err)
+		}
+	} else {
+		swp.Wg.Wait()
+	}
+
 	swp.Executor.CleanUp()
 	return nil
 }

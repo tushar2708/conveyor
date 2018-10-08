@@ -1,5 +1,12 @@
 package conveyor
 
+import (
+	"fmt"
+	"log"
+
+	"golang.org/x/sync/semaphore"
+)
+
 // // FetchExecutor interface binds to nodes that have the capability to fetch intermidiate data, and forward it to next node
 // type FetchExecutor interface {
 // 	FetchAndSend(inputChannel chan interface{}, outputChannel []chan interface{})
@@ -22,14 +29,21 @@ type FetchNode struct {
 }
 
 // NewFetchWorkerPool creates a new FetchWorkerPool
-func NewFetchWorkerPool(executor NodeExecutor) NodeWorker {
+func NewFetchWorkerPool(executor NodeExecutor, mode WorkerMode) NodeWorker {
+
+	wCnt := executor.Count()
+	if wCnt < 1 {
+		wCnt = 1
+	}
 
 	fwp := &FetchWorkerPool{
 		ConcreteNodeWorker: ConcreteNodeWorker{
 			WPool: WPool{
 				Name: executor.GetName() + "_worker",
 			},
-			Executor: executor,
+			WorkerCount: wCnt,
+			Mode:        mode,
+			Executor:    executor,
 		},
 	}
 
@@ -63,15 +77,80 @@ func (fwp *FetchWorkerPool) SetOutputChannel(outChan chan map[string]interface{}
 	return nil
 }
 
-// Start FetchWorkerPool
+// Start Fetch Worker Pool
 func (fwp *FetchWorkerPool) Start(ctx *CnvContext) error {
-	for i := 0; i < fwp.Executor.Count(); i++ {
+	if fwp.Mode == WorkerModeTransaction {
+		return fwp.startTransactionMode(ctx)
+	} else if fwp.Mode == WorkerModeLoop {
+		return fwp.startLoopMode(ctx)
+	} else {
+		return ErrInvalidWorkerMode
+	}
+}
+
+// startLoopMode FetchWorkerPool
+func (fwp *FetchWorkerPool) startLoopMode(ctx *CnvContext) error {
+
+	for i := 0; i < fwp.WorkerCount; i++ {
 		fwp.Wg.Add(1)
 		go func() {
 			defer fwp.Wg.Done()
-			fwp.Executor.Execute(ctx, fwp.inputChannel, fwp.outputChannel)
+
+			if err := fwp.Executor.ExecuteLoop(ctx, fwp.inputChannel, fwp.outputChannel); err != nil {
+				if err == ErrExecuteLoopNotImplemented {
+					ctx.SendLog(3, fmt.Sprintf("Executor:[%s] ", fwp.Executor.GetUniqueIdentifier()), err)
+
+					log.Fatalf("Improper setup of Executor[%s], ExecuteLoop() method is required", fwp.Executor.GetName())
+				} else {
+					return
+				}
+			}
 		}()
 	}
+	return nil
+}
+
+// startTransactionMode starts FetchWorkerPool in transaction mode
+func (fwp *FetchWorkerPool) startTransactionMode(ctx *CnvContext) error {
+
+	sem := semaphore.NewWeighted(int64(fwp.WorkerCount))
+
+workerLoop:
+	for {
+
+		select {
+		case <-ctx.Done():
+			break workerLoop
+		default:
+		}
+
+		if err := sem.Acquire(ctx, 1); err != nil {
+			ctx.SendLog(3, fmt.Sprintf("Executor:[%s]", fwp.Executor.GetUniqueIdentifier()), err)
+			break
+		}
+
+		go func() {
+			defer sem.Release(1)
+			in, ok := <-fwp.inputChannel
+			if ok {
+				out, err := fwp.Executor.Execute(ctx, in)
+				if err == nil {
+					select {
+					case <-ctx.Done():
+						return
+					default:
+					}
+					fwp.outputChannel <- out
+				} else if err == ErrExecuteNotImplemented {
+					ctx.SendLog(3, fmt.Sprintf("Executor:[%s]", fwp.Executor.GetUniqueIdentifier()), err)
+					log.Fatalf("Improper setup of Executor[%s], Execute() method is required", fwp.Executor.GetUniqueIdentifier())
+				}
+			}
+			return
+		}()
+
+	}
+
 	return nil
 }
 
@@ -81,8 +160,22 @@ func (fwp *FetchWorkerPool) WorkerType() string {
 }
 
 // WaitAndStop FetchWorkerPool
-func (fwp *FetchWorkerPool) WaitAndStop() error {
-	fwp.Wg.Wait()
+func (fwp *FetchWorkerPool) WaitAndStop(ctx *CnvContext) error {
+
+	select {
+	case <-ctx.Done():
+		return nil
+	default:
+	}
+
+	if fwp.Mode == WorkerModeTransaction {
+		if err := fwp.sem.Acquire(ctx, int64(fwp.WorkerCount)); err != nil {
+			ctx.SendLog(3, fmt.Sprintf("Worker:[%s] for Executor:[%s] Failed to acquire semaphore", fwp.Name, fwp.Executor.GetUniqueIdentifier()), err)
+		}
+	} else {
+		fwp.Wg.Wait()
+	}
+
 	fwp.Executor.CleanUp()
 	close(fwp.outputChannel)
 	return nil

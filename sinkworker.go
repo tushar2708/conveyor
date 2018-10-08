@@ -1,9 +1,9 @@
 package conveyor
 
 import (
+	"fmt"
 	"log"
 
-	"github.com/sudersen/glog"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -16,13 +16,19 @@ type SinkWorkerPool struct {
 // NewSinkWorkerPool creates a new SinkWorkerPool
 func NewSinkWorkerPool(executor NodeExecutor, mode WorkerMode) NodeWorker {
 
+	wCnt := executor.Count()
+	if wCnt < 1 {
+		wCnt = 1
+	}
+
 	swp := &SinkWorkerPool{
 		ConcreteNodeWorker: ConcreteNodeWorker{
 			WPool: WPool{
 				Name: executor.GetName() + "_worker",
 			},
-			Mode:     mode,
-			Executor: executor,
+			WorkerCount: wCnt,
+			Mode:        mode,
+			Executor:    executor,
 		},
 	}
 
@@ -47,7 +53,7 @@ func (swp *SinkWorkerPool) Start(ctx *CnvContext) error {
 
 // startLoopMode SinkWorkerPool
 func (swp *SinkWorkerPool) startLoopMode(ctx *CnvContext) error {
-	for i := 0; i < swp.Executor.Count(); i++ {
+	for i := 0; i < swp.WorkerCount; i++ {
 		swp.Wg.Add(1)
 
 		go func() {
@@ -56,8 +62,8 @@ func (swp *SinkWorkerPool) startLoopMode(ctx *CnvContext) error {
 
 			if err := swp.Executor.ExecuteLoop(ctx, swp.inputChannel, nil); err != nil {
 				if err == ErrExecuteLoopNotImplemented {
-					glog.V(3).Infof("Executor:[%s], Err:[%s]", swp.Executor.GetName(), err.Error())
-					log.Fatalf("Improper setup of Executor[%s], ExecuteLoop() method is required", swp.Executor.GetName())
+					ctx.SendLog(3, fmt.Sprintf("Executor:[%s]", swp.Executor.GetUniqueIdentifier()), err)
+					log.Fatalf("Improper setup of Executor[%s], ExecuteLoop() method is required", swp.Executor.GetUniqueIdentifier())
 				} else {
 					return
 				}
@@ -70,8 +76,7 @@ func (swp *SinkWorkerPool) startLoopMode(ctx *CnvContext) error {
 
 // startTransactionMode starts SourceWorkerPool in transaction mode
 func (swp *SinkWorkerPool) startTransactionMode(ctx *CnvContext) error {
-	wCnt := swp.Executor.Count()
-	sem := semaphore.NewWeighted(int64(wCnt))
+	sem := semaphore.NewWeighted(int64(swp.WorkerCount))
 
 workerLoop:
 	for {
@@ -83,7 +88,7 @@ workerLoop:
 		}
 
 		if err := sem.Acquire(ctx, 1); err != nil {
-			log.Printf("Failed to acquire semaphore: %v", err)
+			ctx.SendLog(3, fmt.Sprintf("Worker:[%s] for Executor:[%s] Failed to acquire semaphore", swp.Name, swp.Executor.GetUniqueIdentifier()), err)
 			break
 		}
 
@@ -94,8 +99,8 @@ workerLoop:
 				_, err := swp.Executor.Execute(ctx, in)
 				if err != nil {
 					if err == ErrExecuteNotImplemented {
-						glog.V(3).Infof("Executor:[%s], Err:[%s]", swp.Executor.GetName(), err.Error())
-						log.Fatalf("Improper setup of Executor[%s], Execute() method is required", swp.Executor.GetName())
+						ctx.SendLog(3, fmt.Sprintf("Executor:[%s]", swp.Executor.GetUniqueIdentifier()), err)
+						log.Fatalf("Improper setup of Executor[%s], Execute() method is required", swp.Executor.GetUniqueIdentifier())
 					}
 				}
 			}
@@ -136,9 +141,15 @@ func (swp *SinkWorkerPool) WorkerType() string {
 // WaitAndStop SinkWorkerPool
 func (swp *SinkWorkerPool) WaitAndStop(ctx *CnvContext) error {
 
+	select {
+	case <-ctx.Done():
+		return nil
+	default:
+	}
+
 	if swp.Mode == WorkerModeTransaction {
-		if err := swp.sem.Acquire(ctx, int64(swp.Executor.Count())); err != nil {
-			log.Printf("Failed to acquire semaphore: %v", err)
+		if err := swp.sem.Acquire(ctx, int64(swp.WorkerCount)); err != nil {
+			ctx.SendLog(3, fmt.Sprintf("Worker:[%s] for Executor:[%s] Failed to acquire semaphore", swp.Name, swp.Executor.GetUniqueIdentifier()), err)
 		}
 	} else {
 		swp.Wg.Wait()

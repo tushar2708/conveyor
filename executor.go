@@ -1,10 +1,14 @@
 package conveyor
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 // NodeExecutor interface binds to nodes that have the capability to fetch intermidiate data, and forward it to next node
 type NodeExecutor interface {
 	GetName() string
+	GetUniqueIdentifier() string
 	ExecuteLoop(ctx *CnvContext, inChan <-chan map[string]interface{}, outChan chan<- map[string]interface{}) error
 	Execute(ctx *CnvContext, inData map[string]interface{}) (map[string]interface{}, error)
 	Count() int
@@ -52,6 +56,11 @@ var (
 	// ErrSinkInternal error
 	ErrSinkInternal = errors.New("Sink executor internal error")
 )
+
+// GetUniqueIdentifier can be used to fetch a unique string identifying the executor
+func (cnh *ConcreteNodeExecutor) GetUniqueIdentifier() string {
+	return fmt.Sprintf("%s", cnh.Name)
+}
 
 // Count returns the number of executors required
 func (cnh *ConcreteNodeExecutor) Count() int {

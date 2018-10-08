@@ -56,8 +56,9 @@ type WPool struct {
 // ConcreteNodeWorker to run different nodes of comex graph
 type ConcreteNodeWorker struct {
 	WPool
-	Mode     WorkerMode
-	Executor NodeExecutor
+	WorkerCount int
+	Mode        WorkerMode
+	Executor    NodeExecutor
 }
 
 // ConcreteJointWorker to run different nodes of comex graph

@@ -6,8 +6,6 @@ import (
 	"log"
 	"sync"
 	"time"
-
-	"github.com/sudersen/glog"
 )
 
 // Conveyor to run the graph
@@ -323,3 +321,4 @@ func (cnv *Conveyor) MarkError() error {
 	}
 	return cnv.lcHandler.MarkError()
 }
+

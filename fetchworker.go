@@ -105,8 +105,11 @@ func (fwp *FetchWorkerPool) startLoopMode(ctx *CnvContext) error {
 					return
 				}
 			}
+			return
 		}()
+
 	}
+
 	return nil
 }
 

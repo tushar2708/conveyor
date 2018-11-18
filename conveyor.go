@@ -6,6 +6,8 @@ import (
 	"log"
 	"sync"
 	"time"
+
+	"github.com/sudersen/glog"
 )
 
 // Conveyor to run the graph
@@ -19,6 +21,7 @@ type Conveyor struct {
 	progress         chan float64
 	duration         time.Duration
 	expectedDuration time.Duration
+	lcHandler        LifeCycleHandler
 
 	workers []NodeWorker
 	joints  []JointWorker
@@ -33,6 +36,11 @@ type Conveyor struct {
 // Status returns a channel on which Conveyor Statuses will be published
 func (cnv *Conveyor) Status() <-chan string {
 	return cnv.ctx.Data.status
+}
+
+// GetConveyorContext gives the conveyor's context object
+func (cnv *Conveyor) GetConveyorContext() *CnvContext {
+	return cnv.ctx
 }
 
 // Done returns the context.Done() channel of Conveyor
@@ -61,7 +69,7 @@ var (
 // New creates a new Conveyor instance
 func New(name string, bufferLen int) (*Conveyor, error) {
 
-	conveyor, err := newConveyor(name, bufferLen, -1)
+	conveyor, err := newConveyor(name, bufferLen, nil, -1)
 	conveyor.needProgress = false
 
 	return conveyor, err
@@ -70,20 +78,20 @@ func New(name string, bufferLen int) (*Conveyor, error) {
 // NewTimeout creates a new Conveyor instance with specified timeout
 func NewTimeout(name string, bufferLen int, timeout time.Duration) (*Conveyor, error) {
 
-	conveyor, err := newConveyor(name, bufferLen, timeout)
+	conveyor, err := newConveyor(name, bufferLen, nil, timeout)
 	conveyor.needProgress = false
 
 	return conveyor, err
 }
 
 // NewTimeoutAndProgress creates a new Conveyor instance
-func NewTimeoutAndProgress(name string, bufferLen int, timeout, expectedDuration time.Duration) (*Conveyor, error) {
+func NewTimeoutAndProgress(name string, bufferLen int, lch LifeCycleHandler, timeout, expectedDuration time.Duration) (*Conveyor, error) {
 
 	if expectedDuration == 0 {
 		expectedDuration = time.Hour
 	}
 
-	conveyor, err := newConveyor(name, bufferLen, timeout)
+	conveyor, err := newConveyor(name, bufferLen, lch, timeout)
 
 	conveyor.needProgress = true
 	conveyor.expectedDuration = expectedDuration
@@ -92,7 +100,7 @@ func NewTimeoutAndProgress(name string, bufferLen int, timeout, expectedDuration
 	return conveyor, err
 }
 
-func newConveyor(name string, bufferLen int, timeout time.Duration) (*Conveyor, error) {
+func newConveyor(name string, bufferLen int, lch LifeCycleHandler, timeout time.Duration) (*Conveyor, error) {
 
 	if bufferLen <= 0 {
 		bufferLen = 100
@@ -117,6 +125,7 @@ func newConveyor(name string, bufferLen int, timeout time.Duration) (*Conveyor, 
 		Name:      name,
 		bufferLen: bufferLen,
 		ctx:       ctx,
+		lcHandler: lch,
 	}
 
 	return cnv, nil
@@ -203,7 +212,7 @@ func (cnv *Conveyor) Start() error {
 	// wait for the conveyor to finish
 	wg.Wait()
 
-	cnv.cleanup() // Cleanup() will be called from here, in case of success or timeout
+	cnv.cleanup(false) // Cleanup() will be called from here, in case of success or timeout
 
 	return nil
 }
@@ -212,18 +221,23 @@ func (cnv *Conveyor) Start() error {
 // No need to call it if campaign is finishing on it's own
 func (cnv *Conveyor) Stop() time.Duration {
 	// Cancel ctx
-	cnv.cleanup() // cleanup() will be called from here, in case of killing conveyor
+	cnv.cleanup(true) // cleanup() will be called from here, in case of killing conveyor
 	return cnv.duration
 }
 
 // cleanup should be called in all the termination cases: success, kill, & timeout
-func (cnv *Conveyor) cleanup() {
+func (cnv *Conveyor) cleanup(abruptKill bool) {
 	// In case, conveyor was killed, ctx.Cancel() night have been already called, but it's an idempotent method
 	cnv.ctx.Cancel()
 	if cnv.needProgress {
 		cnv.cleanupOnce.Do(func() {
 			close(cnv.progress)
 		})
+	}
+	if abruptKill == false {
+		if err := cnv.MarkFinished(); err != nil {
+			glog.V(3).Infof("Campaign:[%s] unable to set status as 'finished' to redis: %v\n", cnv.Name, err)
+		}
 	}
 }
 
@@ -260,4 +274,52 @@ trackProgress:
 		}
 	}
 
+}
+
+// MarkPreparing marks conveyor status as "preparing"
+func (cnv *Conveyor) MarkPreparing() error {
+	if cnv.lcHandler == nil {
+		return ErrLifeCycleNotSupported
+	}
+	return cnv.lcHandler.MarkPreparing()
+}
+
+// MarkStarted marks conveyor status as "started"
+func (cnv *Conveyor) MarkStarted() error {
+	if cnv.lcHandler == nil {
+		return ErrLifeCycleNotSupported
+	}
+	return cnv.lcHandler.MarkStarted()
+}
+
+// MarkToKill marks conveyor status as "to kill"
+func (cnv *Conveyor) MarkToKill() error {
+	if cnv.lcHandler == nil {
+		return ErrLifeCycleNotSupported
+	}
+	return cnv.lcHandler.MarkToKill()
+}
+
+// MarkKilled marks conveyor status as "killed"
+func (cnv *Conveyor) MarkKilled() error {
+	if cnv.lcHandler == nil {
+		return ErrLifeCycleNotSupported
+	}
+	return cnv.lcHandler.MarkKilled()
+}
+
+// MarkFinished marks conveyor status as "finished"
+func (cnv *Conveyor) MarkFinished() error {
+	if cnv.lcHandler == nil {
+		return ErrLifeCycleNotSupported
+	}
+	return cnv.lcHandler.MarkFinished()
+}
+
+// MarkError marks conveyor status as "internal error"
+func (cnv *Conveyor) MarkError() error {
+	if cnv.lcHandler == nil {
+		return ErrLifeCycleNotSupported
+	}
+	return cnv.lcHandler.MarkError()
 }

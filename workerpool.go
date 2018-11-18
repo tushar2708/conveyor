@@ -34,14 +34,6 @@ const (
 	// Needs more code, use only if you are ready to peek into how it works.
 	// Some use cases are, where you can't fetch data on-demand with a function call. Eg. Running an NPI server as source
 	WorkerModeLoop
-
-)
-
-var (
-	// ErrInputChanDoesNotExist error
-	ErrInputChanDoesNotExist = errors.New("input channel doesn't exist for this node")
-	// ErrOutputChanDoesNotExist error
-	ErrOutputChanDoesNotExist = errors.New("output channel doesn't exist for this node")
 )
 
 // WPool to run different nodes of comex graph

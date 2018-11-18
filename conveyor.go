@@ -234,7 +234,7 @@ func (cnv *Conveyor) cleanup(abruptKill bool) {
 	}
 	if abruptKill == false {
 		if err := cnv.MarkFinished(); err != nil {
-			glog.V(3).Infof("Campaign:[%s] unable to set status as 'finished' to redis: %v\n", cnv.Name, err)
+			log.Printf("Campaign:[%s] unable to set status as 'finished' to redis: %v\n", cnv.Name, err)
 		}
 	}
 }
@@ -321,4 +321,3 @@ func (cnv *Conveyor) MarkError() error {
 	}
 	return cnv.lcHandler.MarkError()
 }
-

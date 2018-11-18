@@ -1,7 +1,5 @@
 package conveyor
 
-import "errors"
-
 // LinkWorker2Worker links two NodeWorkers, maps input channel of a b on output channel of a
 func LinkWorker2Worker(a NodeWorker, b NodeWorker) error {
 	ch, err := b.GetInputChannel()

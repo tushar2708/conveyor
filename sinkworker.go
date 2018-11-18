@@ -68,11 +68,9 @@ func (swp *SinkWorkerPool) startLoopMode(ctx *CnvContext) error {
 					return
 				}
 			}
-			return
+
 		}()
-
 	}
-
 	return nil
 }
 

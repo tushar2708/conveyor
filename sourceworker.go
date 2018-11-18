@@ -109,7 +109,6 @@ workerLoop:
 			break workerLoop
 		}
 
-
 		select {
 		case <-ctx.Done():
 			break workerLoop

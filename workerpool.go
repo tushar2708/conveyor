@@ -1,7 +1,6 @@
 package conveyor
 
 import (
-	"errors"
 	"sync"
 
 	"golang.org/x/sync/semaphore"
@@ -35,6 +34,7 @@ const (
 	// Needs more code, use only if you are ready to peek into how it works.
 	// Some use cases are, where you can't fetch data on-demand with a function call. Eg. Running an NPI server as source
 	WorkerModeLoop
+
 )
 
 var (

@@ -3,6 +3,7 @@ package conveyor
 import (
 	"fmt"
 	"log"
+	"sync"
 
 	"golang.org/x/sync/semaphore"
 )
@@ -74,16 +75,17 @@ func (swp *SourceWorkerPool) startLoopMode(ctx *CnvContext) error {
 
 	for i := 0; i < swp.WorkerCount; i++ {
 		swp.Wg.Add(1)
+		fmt.Println("src wg add 1")
 		go func() {
+			defer fmt.Println("src wg done 1")
 			defer swp.Wg.Done()
 			if err := swp.Executor.ExecuteLoop(ctx, nil, swp.outputChannel); err != nil {
 				if err == ErrExecuteLoopNotImplemented {
 					ctx.SendLog(3, fmt.Sprintf("Executor:[%s] ", swp.Executor.GetUniqueIdentifier()), err)
 
 					log.Fatalf("Improper setup of Executor[%s], ExecuteLoop() method is required", swp.Executor.GetName())
-				} else {
-					return
 				}
+				return
 			}
 		}()
 	}
@@ -95,8 +97,18 @@ func (swp *SourceWorkerPool) startTransactionMode(ctx *CnvContext) error {
 
 	swp.sem = semaphore.NewWeighted(int64(swp.WorkerCount))
 
+	workerDone := false
+	doneMutex := new(sync.RWMutex)
+
 workerLoop:
 	for {
+
+		doneMutex.RLock()
+		if workerDone == true {
+			doneMutex.RUnlock()
+			break workerLoop
+		}
+
 
 		select {
 		case <-ctx.Done():
@@ -124,6 +136,10 @@ workerLoop:
 				log.Fatalf("Improper setup of Executor[%s], Execute() method is required", swp.Executor.GetUniqueIdentifier())
 			} else if err == ErrSourceExhausted {
 				ctx.SendLog(3, fmt.Sprintf("Executor:[%s]", swp.Executor.GetUniqueIdentifier()), err)
+				doneMutex.Lock()
+				workerDone = true
+				doneMutex.Unlock()
+				ctx.Cancel()
 				return
 			}
 			return
@@ -156,6 +172,7 @@ func (swp *SourceWorkerPool) WaitAndStop(ctx *CnvContext) error {
 		swp.Wg.Wait()
 	}
 	swp.Executor.CleanUp()
+	fmt.Println("going to close src out channel")
 	close(swp.outputChannel)
 	return nil
 }

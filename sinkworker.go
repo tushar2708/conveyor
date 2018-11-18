@@ -68,15 +68,17 @@ func (swp *SinkWorkerPool) startLoopMode(ctx *CnvContext) error {
 					return
 				}
 			}
-
+			return
 		}()
+
 	}
+
 	return nil
 }
 
 // startTransactionMode starts SourceWorkerPool in transaction mode
 func (swp *SinkWorkerPool) startTransactionMode(ctx *CnvContext) error {
-	sem := semaphore.NewWeighted(int64(swp.WorkerCount))
+	swp.sem = semaphore.NewWeighted(int64(swp.WorkerCount))
 
 workerLoop:
 	for {
@@ -87,14 +89,21 @@ workerLoop:
 		default:
 		}
 
-		if err := sem.Acquire(ctx, 1); err != nil {
+		in, ok := <-swp.inputChannel
+		if !ok {
+			ctx.SendLog(3, fmt.Sprintf("Executor:[%s] sink's input channel closed", swp.Executor.GetUniqueIdentifier()), nil)
+			break workerLoop
+		}
+
+		if err := swp.sem.Acquire(ctx, 1); err != nil {
 			ctx.SendLog(3, fmt.Sprintf("Worker:[%s] for Executor:[%s] Failed to acquire semaphore", swp.Name, swp.Executor.GetUniqueIdentifier()), err)
 			break
 		}
+		fmt.Println("sink sem acquire 1")
 
-		go func() {
-			defer sem.Release(1)
-			in, ok := <-swp.inputChannel
+		go func(data map[string]interface{}) {
+			defer fmt.Println("sink sem release 1")
+			defer swp.sem.Release(1)
 			if ok {
 				_, err := swp.Executor.Execute(ctx, in)
 				if err != nil {
@@ -105,7 +114,7 @@ workerLoop:
 				}
 			}
 			return
-		}()
+		}(in)
 
 	}
 

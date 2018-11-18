@@ -11,12 +11,6 @@ func LinkWorker2Worker(a NodeWorker, b NodeWorker) error {
 	return err
 }
 
-// ErrLessInputChannelsInJoint error
-var ErrLessInputChannelsInJoint = errors.New("JointWorker doesn't have enough input channels")
-
-// ErrLessOutputChannelsInJoint error
-var ErrLessOutputChannelsInJoint = errors.New("JointWorker doesn't have enough output channels")
-
 // LinkWorker2Joint links two NodeWorkers, maps input channel of a b on output channel of a
 func LinkWorker2Joint(a NodeWorker, b JointWorker, index int) error {
 	chnls, err := b.GetInputChannels()

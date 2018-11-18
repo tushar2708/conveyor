@@ -105,15 +105,18 @@ func (fwp *FetchWorkerPool) startLoopMode(ctx *CnvContext) error {
 					return
 				}
 			}
+			return
 		}()
+
 	}
+
 	return nil
 }
 
 // startTransactionMode starts FetchWorkerPool in transaction mode
 func (fwp *FetchWorkerPool) startTransactionMode(ctx *CnvContext) error {
 
-	sem := semaphore.NewWeighted(int64(fwp.WorkerCount))
+	fwp.sem = semaphore.NewWeighted(int64(fwp.WorkerCount))
 
 workerLoop:
 	for {
@@ -124,30 +127,36 @@ workerLoop:
 		default:
 		}
 
-		if err := sem.Acquire(ctx, 1); err != nil {
-			ctx.SendLog(3, fmt.Sprintf("Executor:[%s]", fwp.Executor.GetUniqueIdentifier()), err)
-			break
+		in, ok := <-fwp.inputChannel
+		if !ok {
+			ctx.SendLog(3, fmt.Sprintf("Executor:[%s] fetch's input channel closed", fwp.Executor.GetUniqueIdentifier()), nil)
+			break workerLoop
 		}
 
-		go func() {
-			defer sem.Release(1)
-			in, ok := <-fwp.inputChannel
-			if ok {
-				out, err := fwp.Executor.Execute(ctx, in)
-				if err == nil {
-					select {
-					case <-ctx.Done():
-						return
-					default:
-					}
-					fwp.outputChannel <- out
-				} else if err == ErrExecuteNotImplemented {
-					ctx.SendLog(3, fmt.Sprintf("Executor:[%s]", fwp.Executor.GetUniqueIdentifier()), err)
-					log.Fatalf("Improper setup of Executor[%s], Execute() method is required", fwp.Executor.GetUniqueIdentifier())
+		if err := fwp.sem.Acquire(ctx, 1); err != nil {
+			ctx.SendLog(3, fmt.Sprintf("Executor:[%s], sem acquire failed", fwp.Executor.GetUniqueIdentifier()), err)
+			break workerLoop
+		}
+		// fmt.Println("fetch sem acquire 1")
+
+		go func(data map[string]interface{}) {
+			// defer fmt.Println("fetch sem release 1")
+			defer fwp.sem.Release(1)
+
+			out, err := fwp.Executor.Execute(ctx, in)
+			if err == nil {
+				select {
+				case <-ctx.Done():
+					return
+				default:
 				}
+				fwp.outputChannel <- out
+			} else if err == ErrExecuteNotImplemented {
+				ctx.SendLog(3, fmt.Sprintf("Executor:[%s]", fwp.Executor.GetUniqueIdentifier()), err)
+				log.Fatalf("Improper setup of Executor[%s], Execute() method is required", fwp.Executor.GetUniqueIdentifier())
 			}
 			return
-		}()
+		}(in)
 
 	}
 

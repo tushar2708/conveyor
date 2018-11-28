@@ -58,7 +58,6 @@ func (swp *SinkWorkerPool) startLoopMode(ctx *CnvContext) error {
 
 		go func() {
 			defer swp.Wg.Done()
-			swp.Executor.ExecuteLoop(ctx, swp.inputChannel, nil)
 
 			if err := swp.Executor.ExecuteLoop(ctx, swp.inputChannel, nil); err != nil {
 				if err == ErrExecuteLoopNotImplemented {
@@ -97,13 +96,13 @@ workerLoop:
 			ctx.SendLog(3, fmt.Sprintf("Worker:[%s] for Executor:[%s] Failed to acquire semaphore", swp.Name, swp.Executor.GetUniqueIdentifier()), err)
 			break
 		}
-		fmt.Println("sink sem acquire 1")
+		// fmt.Println("sink sem acquire 1")
 
 		go func(data map[string]interface{}) {
-			defer fmt.Println("sink sem release 1")
+			// defer fmt.Println("sink sem release 1")
 			defer swp.sem.Release(1)
 			if ok {
-				_, err := swp.Executor.Execute(ctx, in)
+				_, err := swp.Executor.Execute(ctx, data)
 				if err != nil {
 					if err == ErrExecuteNotImplemented {
 						ctx.SendLog(3, fmt.Sprintf("Executor:[%s]", swp.Executor.GetUniqueIdentifier()), err)

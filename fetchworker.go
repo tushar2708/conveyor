@@ -140,7 +140,7 @@ workerLoop:
 			// defer fmt.Println("fetch sem release 1")
 			defer fwp.sem.Release(1)
 
-			out, err := fwp.Executor.Execute(ctx, in)
+			out, err := fwp.Executor.Execute(ctx, data)
 			if err == nil {
 				select {
 				case <-ctx.Done():

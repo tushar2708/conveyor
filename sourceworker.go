@@ -75,9 +75,9 @@ func (swp *SourceWorkerPool) startLoopMode(ctx *CnvContext) error {
 
 	for i := 0; i < swp.WorkerCount; i++ {
 		swp.Wg.Add(1)
-		fmt.Println("src wg add 1")
+		// fmt.Println("src wg add 1")
 		go func() {
-			defer fmt.Println("src wg done 1")
+			// defer fmt.Println("src wg done 1")
 			defer swp.Wg.Done()
 			if err := swp.Executor.ExecuteLoop(ctx, nil, swp.outputChannel); err != nil {
 				if err == ErrExecuteLoopNotImplemented {
@@ -108,6 +108,7 @@ workerLoop:
 			doneMutex.RUnlock()
 			break workerLoop
 		}
+		doneMutex.RUnlock()
 
 		select {
 		case <-ctx.Done():
@@ -171,7 +172,7 @@ func (swp *SourceWorkerPool) WaitAndStop(ctx *CnvContext) error {
 		swp.Wg.Wait()
 	}
 	swp.Executor.CleanUp()
-	fmt.Println("going to close src out channel")
+	// fmt.Println("going to close src out channel")
 	close(swp.outputChannel)
 	return nil
 }

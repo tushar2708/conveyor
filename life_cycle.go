@@ -19,7 +19,9 @@ const (
 type LifeCycleHandler interface {
 	GetState() (string, error)
 	GetStatusMsg() (string, error)
+	UpdateStatusMsg(string) error
 	GetProgress() (string, error)
+	UpdateProgress(string) error
 	MarkPreparing() error
 	MarkStarted() error
 	MarkToKill() error

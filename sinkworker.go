@@ -161,6 +161,8 @@ func (swp *SinkWorkerPool) WaitAndStop(ctx *CnvContext) error {
 		swp.Wg.Wait()
 	}
 
+	ctx.SendLog(3, fmt.Sprintf("Sink Worker:[%s] done, calling cleanup", swp.Name), nil)
+
 	swp.Executor.CleanUp()
 	return nil
 }

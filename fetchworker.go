@@ -182,6 +182,8 @@ func (fwp *FetchWorkerPool) WaitAndStop(ctx *CnvContext) error {
 		fwp.Wg.Wait()
 	}
 
+	ctx.SendLog(3, fmt.Sprintf("Fetch Worker:[%s] done, calling cleanup", fwp.Name), nil)
+
 	fwp.Executor.CleanUp()
 	close(fwp.outputChannel)
 	return nil

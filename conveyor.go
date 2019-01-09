@@ -92,6 +92,8 @@ func NewTimeoutAndProgress(name string, bufferLen int, lch LifeCycleHandler, tim
 	conveyor, err := newConveyor(name, bufferLen, lch, timeout)
 
 	conveyor.needProgress = true
+	conveyor.progress = make(chan float64, 1)
+
 	conveyor.expectedDuration = expectedDuration
 	conveyor.tickProgress = time.Millisecond * 500
 
@@ -242,7 +244,6 @@ func (cnv *Conveyor) cleanup(abruptKill bool) {
 func (cnv *Conveyor) updateProgress() {
 
 	start := time.Now()
-	cnv.progress = make(chan float64, 1)
 
 	ticker := time.NewTicker(cnv.tickProgress)
 	defer ticker.Stop()

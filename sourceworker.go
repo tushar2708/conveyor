@@ -171,6 +171,8 @@ func (swp *SourceWorkerPool) WaitAndStop(ctx *CnvContext) error {
 	} else {
 		swp.Wg.Wait()
 	}
+	ctx.SendLog(3, fmt.Sprintf("Source Worker:[%s] done, calling cleanup", swp.Name), nil)
+
 	swp.Executor.CleanUp()
 	// fmt.Println("going to close src out channel")
 	close(swp.outputChannel)

@@ -12,7 +12,7 @@ import "log"
 
 // JointWorkerPool struct provides the worker pool infra for Fetch interface
 type JointWorkerPool struct {
-	ConcreteJointWorker
+	*ConcreteJointWorker
 	nextWorkerCount int
 	inputChannels   []chan map[string]interface{}
 	outputChannels  []chan map[string]interface{}
@@ -21,8 +21,8 @@ type JointWorkerPool struct {
 // NewJointWorkerPool creates a new FetchWorkerPool
 func NewJointWorkerPool(executor JointExecutor) JointWorker {
 	jwp := &JointWorkerPool{
-		ConcreteJointWorker: ConcreteJointWorker{
-			WPool: WPool{
+		ConcreteJointWorker: &ConcreteJointWorker{
+			WPool: &WPool{
 				Name: executor.GetName() + "_worker",
 			},
 			Executor: executor,

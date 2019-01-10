@@ -10,7 +10,7 @@ import (
 
 // SourceWorkerPool struct provides the worker pool infra for Source interface
 type SourceWorkerPool struct {
-	ConcreteNodeWorker
+	*ConcreteNodeWorker
 	nextWorkerCount int
 	outputChannel   chan map[string]interface{}
 }
@@ -24,8 +24,8 @@ func NewSourceWorkerPool(executor NodeExecutor, mode WorkerMode) NodeWorker {
 	}
 
 	swp := &SourceWorkerPool{
-		ConcreteNodeWorker: ConcreteNodeWorker{
-			WPool: WPool{
+		ConcreteNodeWorker: &ConcreteNodeWorker{
+			WPool: &WPool{
 				Name: executor.GetName() + "_worker",
 			},
 			WorkerCount: wCnt,

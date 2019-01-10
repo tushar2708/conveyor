@@ -17,7 +17,7 @@ import (
 
 // FetchWorkerPool struct provides the worker pool infra for Fetch interface
 type FetchWorkerPool struct {
-	ConcreteNodeWorker
+	*ConcreteNodeWorker
 	nextWorkerCount int
 	inputChannel    chan map[string]interface{}
 	outputChannel   chan map[string]interface{}
@@ -37,8 +37,8 @@ func NewFetchWorkerPool(executor NodeExecutor, mode WorkerMode) NodeWorker {
 	}
 
 	fwp := &FetchWorkerPool{
-		ConcreteNodeWorker: ConcreteNodeWorker{
-			WPool: WPool{
+		ConcreteNodeWorker: &ConcreteNodeWorker{
+			WPool: &WPool{
 				Name: executor.GetName() + "_worker",
 			},
 			WorkerCount: wCnt,

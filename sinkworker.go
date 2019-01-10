@@ -9,7 +9,7 @@ import (
 
 // SinkWorkerPool struct provides the worker pool infra for Sink interface
 type SinkWorkerPool struct {
-	ConcreteNodeWorker
+	*ConcreteNodeWorker
 	inputChannel chan map[string]interface{}
 }
 
@@ -22,8 +22,8 @@ func NewSinkWorkerPool(executor NodeExecutor, mode WorkerMode) NodeWorker {
 	}
 
 	swp := &SinkWorkerPool{
-		ConcreteNodeWorker: ConcreteNodeWorker{
-			WPool: WPool{
+		ConcreteNodeWorker: &ConcreteNodeWorker{
+			WPool: &WPool{
 				Name: executor.GetName() + "_worker",
 			},
 			WorkerCount: wCnt,

@@ -111,7 +111,7 @@ func newConveyor(name string, bufferLen int, lch LifeCycleHandler, timeout time.
 		Data: CtxData{
 			Name:   name,
 			logs:   make(chan Message, 100),
-			status: make(chan string, 1),
+			status: make(chan string, 100),
 		},
 	}
 	var ctx *CnvContext

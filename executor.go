@@ -65,6 +65,11 @@ func (cjh *ConcreteJointExecutor) GetName() string {
 	return cjh.Name
 }
 
+// GetUniqueIdentifier can be used to fetch a unique string identifying the executor
+func (cjh *ConcreteJointExecutor) GetUniqueIdentifier() string {
+	return fmt.Sprintf("%s", cjh.Name)
+}
+
 // InputCount returns the number of executors required
 func (cjh *ConcreteJointExecutor) InputCount() int {
 	return 1

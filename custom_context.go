@@ -26,20 +26,38 @@ type CtxData struct {
 
 }
 
-// CnvContext is a wrapper over context.Context
+// CnvContext is an interface, which is satisfied by CnvContext.
+// This interface is primarily to enabling mocking for unit-testing.CnvContextAble
+// Or may be, something fancy that you might want to do.
+type CnvContext interface {
+	context.Context
+	WithCancel() CnvContext
+	WithTimeout(time.Duration) CnvContext
+	Cancel()
+	SendLog(int32, string, error)
+	SendStatus(string)
+	GetData() CtxData
+}
+
+// cnvContext is a wrapper over context.Context
 // To avoid sacrificing type checking with context.WithValue() wherever it's not needed
-type CnvContext struct {
+type cnvContext struct {
 	context.Context
 
 	cancelOnce sync.Once
 	Data       CtxData
 }
 
+// GetData
+func (ctx *cnvContext) GetData() CtxData {
+	return ctx.Data
+}
+
 // WithCancel is a wrapper on context.WithCancel() for CnvContext type,
 // that also copies the Data to new context
-func (ctx *CnvContext) WithCancel() *CnvContext {
+func (ctx *cnvContext) WithCancel() CnvContext {
 	newctx, cancel := context.WithCancel(ctx.Context)
-	cnvContext := &CnvContext{
+	cnvContext := &cnvContext{
 		Context: newctx,
 		Data:    ctx.Data,
 	}
@@ -50,9 +68,9 @@ func (ctx *CnvContext) WithCancel() *CnvContext {
 
 // WithTimeout is a wrapper on context.WithTimeout() for CnvContext type,
 // that also copies the Data to new context
-func (ctx *CnvContext) WithTimeout(timeout time.Duration) *CnvContext {
+func (ctx *cnvContext) WithTimeout(timeout time.Duration) CnvContext {
 	newctx, cancel := context.WithTimeout(ctx.Context, timeout)
-	cnvContext := &CnvContext{
+	cnvContext := &cnvContext{
 		Context: newctx,
 		Data:    ctx.Data,
 	}
@@ -63,7 +81,7 @@ func (ctx *CnvContext) WithTimeout(timeout time.Duration) *CnvContext {
 
 // Cancel the derived context, along with closing internal channels
 // It has been made to follow the "non-panic multiple cancel" behaviour of built-in context
-func (ctx *CnvContext) Cancel() {
+func (ctx *cnvContext) Cancel() {
 	if ctx.Data.cancelProgress != nil {
 		ctx.Data.cancelProgress()
 	}
@@ -81,7 +99,7 @@ func (ctx *CnvContext) Cancel() {
 }
 
 // SendLog sends conveyor's internal logs to be available on conveyor.Logs()
-func (ctx *CnvContext) SendLog(logLevel int32, text string, err error) {
+func (ctx *cnvContext) SendLog(logLevel int32, text string, err error) {
 	if err != nil {
 		text = fmt.Sprintf("conveyor: %s, [err: %s]\n", text, err)
 	} else {
@@ -107,7 +125,7 @@ func (ctx *CnvContext) SendLog(logLevel int32, text string, err error) {
 }
 
 // SendStatus sends conveyor's internal logs to be available on conveyor.Status()
-func (ctx *CnvContext) SendStatus(status string) {
+func (ctx *cnvContext) SendStatus(status string) {
 
 	select {
 	case <-ctx.Done():

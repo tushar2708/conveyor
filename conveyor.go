@@ -8,10 +8,10 @@ import (
 	"time"
 )
 
-// Conveyor to run the graph
+// Conveyor is base
 type Conveyor struct {
 	Name         string
-	ctx          *CnvContext
+	ctx          CnvContext
 	needProgress bool
 	tickProgress time.Duration
 	bufferLen    int
@@ -33,11 +33,11 @@ type Conveyor struct {
 
 // Status returns a channel on which Conveyor Statuses will be published
 func (cnv *Conveyor) Status() <-chan string {
-	return cnv.ctx.Data.status
+	return cnv.ctx.GetData().status
 }
 
 // GetConveyorContext gives the conveyor's context object
-func (cnv *Conveyor) GetConveyorContext() *CnvContext {
+func (cnv *Conveyor) GetConveyorContext() CnvContext {
 	return cnv.ctx
 }
 
@@ -56,7 +56,7 @@ func (cnv *Conveyor) Progress() <-chan float64 {
 
 // Logs returns a channel on which Conveyor Statuses will be published
 func (cnv *Conveyor) Logs() <-chan Message {
-	return cnv.ctx.Data.logs
+	return cnv.ctx.GetData().logs
 }
 
 var (
@@ -64,32 +64,32 @@ var (
 	ErrEmptyConveyor = errors.New("conveyor is empty, no workers employed")
 )
 
-// New creates a new Conveyor instance
-func New(name string, bufferLen int) (*Conveyor, error) {
+// NewConveyor creates a new Conveyor instance
+func NewConveyor(name string, bufferLen int) (*Conveyor, error) {
 
-	conveyor, err := newConveyor(name, bufferLen, nil, -1)
+	conveyor, err := newConveyorWithInbuiltCtx(name, bufferLen, nil, -1)
 	conveyor.needProgress = false
 
 	return conveyor, err
 }
 
-// NewTimeout creates a new Conveyor instance with specified timeout
-func NewTimeout(name string, bufferLen int, timeout time.Duration) (*Conveyor, error) {
+// NewTimeoutConveyor creates a new Conveyor instance with specified timeout
+func NewTimeoutConveyor(name string, bufferLen int, timeout time.Duration) (*Conveyor, error) {
 
-	conveyor, err := newConveyor(name, bufferLen, nil, timeout)
+	conveyor, err := newConveyorWithInbuiltCtx(name, bufferLen, nil, timeout)
 	conveyor.needProgress = false
 
 	return conveyor, err
 }
 
-// NewTimeoutAndProgress creates a new Conveyor instance
-func NewTimeoutAndProgress(name string, bufferLen int, lch LifeCycleHandler, timeout, expectedDuration time.Duration) (*Conveyor, error) {
+// NewTimeoutAndProgressConveyor creates a new Conveyor instance
+func NewTimeoutAndProgressConveyor(name string, bufferLen int, lch LifeCycleHandler, timeout, expectedDuration time.Duration) (*Conveyor, error) {
 
 	if expectedDuration == 0 {
 		expectedDuration = time.Hour
 	}
 
-	conveyor, err := newConveyor(name, bufferLen, lch, timeout)
+	conveyor, err := newConveyorWithInbuiltCtx(name, bufferLen, lch, timeout)
 
 	conveyor.needProgress = true
 	conveyor.progress = make(chan float64, 1)
@@ -100,13 +100,31 @@ func NewTimeoutAndProgress(name string, bufferLen int, lch LifeCycleHandler, tim
 	return conveyor, err
 }
 
-func newConveyor(name string, bufferLen int, lch LifeCycleHandler, timeout time.Duration) (*Conveyor, error) {
+// NewConveyorWithCustomCtx creates a new Conveyor instance with custom context management
+func NewConveyorWithCustomCtx(name string, bufferLen int, lch LifeCycleHandler, timeout, expectedDuration time.Duration, _ctx CnvContext) (*Conveyor, error) {
+
+	if expectedDuration == 0 {
+		expectedDuration = time.Hour
+	}
+
+	conveyor, err := newConveyor(name, bufferLen, lch, timeout, _ctx)
+
+	conveyor.needProgress = true
+	conveyor.progress = make(chan float64, 1)
+
+	conveyor.expectedDuration = expectedDuration
+	conveyor.tickProgress = time.Millisecond * 500
+
+	return conveyor, err
+}
+
+func newConveyorWithInbuiltCtx(name string, bufferLen int, lch LifeCycleHandler, timeout time.Duration) (*Conveyor, error) {
 
 	if bufferLen <= 0 {
 		bufferLen = 100
 	}
 
-	_ctx := &CnvContext{
+	_ctx := &cnvContext{
 		Context: context.Background(),
 		Data: CtxData{
 			Name:   name,
@@ -114,7 +132,30 @@ func newConveyor(name string, bufferLen int, lch LifeCycleHandler, timeout time.
 			status: make(chan string, 100),
 		},
 	}
-	var ctx *CnvContext
+	var ctx CnvContext
+	if timeout <= 0 {
+		ctx = _ctx.WithCancel()
+	} else {
+		ctx = _ctx.WithTimeout(timeout)
+	}
+
+	cnv := &Conveyor{
+		Name:      name,
+		bufferLen: bufferLen,
+		ctx:       ctx,
+		lcHandler: lch,
+	}
+
+	return cnv, nil
+}
+
+func newConveyor(name string, bufferLen int, lch LifeCycleHandler, timeout time.Duration, _ctx CnvContext) (*Conveyor, error) {
+
+	if bufferLen <= 0 {
+		bufferLen = 100
+	}
+
+	var ctx CnvContext
 	if timeout <= 0 {
 		ctx = _ctx.WithCancel()
 	} else {

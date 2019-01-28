@@ -8,8 +8,8 @@ import (
 type NodeExecutor interface {
 	GetName() string
 	GetUniqueIdentifier() string
-	ExecuteLoop(ctx *CnvContext, inChan <-chan map[string]interface{}, outChan chan<- map[string]interface{}) error
-	Execute(ctx *CnvContext, inData map[string]interface{}) (map[string]interface{}, error)
+	ExecuteLoop(ctx CnvContext, inChan <-chan map[string]interface{}, outChan chan<- map[string]interface{}) error
+	Execute(ctx CnvContext, inData map[string]interface{}) (map[string]interface{}, error)
 	Count() int
 	CleanUp() error
 }
@@ -17,7 +17,8 @@ type NodeExecutor interface {
 // JointExecutor interface binds to nodes that have the capability to fetch intermidiate data, and forward it to next node
 type JointExecutor interface {
 	GetName() string
-	Execute(ctx *CnvContext, inChan []chan map[string]interface{}, outChan []chan map[string]interface{}) error
+	GetUniqueIdentifier() string
+	ExecuteLoop(ctx CnvContext, inChan []chan map[string]interface{}, outChan []chan map[string]interface{}) error
 	Count() int
 	InputCount() int
 	OutputCount() int

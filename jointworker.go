@@ -1,6 +1,9 @@
 package conveyor
 
-import "log"
+import (
+	"fmt"
+	"log"
+)
 
 // // FetchExecutor interface binds to nodes that have the capability to fetch intermidiate data, and forward it to next node
 // type FetchExecutor interface {
@@ -74,13 +77,14 @@ func (jwp *JointWorkerPool) AddOutputChannel(outChan chan map[string]interface{}
 }
 
 // Start JoinWorkerPool
-func (jwp *JointWorkerPool) Start(ctx *CnvContext) error {
+func (jwp *JointWorkerPool) Start(ctx CnvContext) error {
 	for i := 0; i < jwp.Executor.Count(); i++ {
 		jwp.Wg.Add(1)
 		go func() {
 			defer jwp.Wg.Done()
-			if err := jwp.Executor.Execute(ctx, jwp.inputChannels, jwp.outputChannels); err != nil {
-				log.Println("join executor start failed", err)
+			if err := jwp.Executor.ExecuteLoop(ctx, jwp.inputChannels, jwp.outputChannels); err != nil {
+				ctx.SendLog(0, fmt.Sprintf("Executor:[%s]", jwp.Executor.GetUniqueIdentifier()), err)
+				log.Fatalf("Improper setup of Executor[%s], ExecuteLoop() method is required", jwp.Executor.GetUniqueIdentifier())
 				return
 			}
 		}()

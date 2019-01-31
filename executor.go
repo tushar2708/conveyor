@@ -50,6 +50,26 @@ func (cnh *ConcreteNodeExecutor) CleanUp() error {
 	return nil
 }
 
+// Execute should take a "map[string]interface{}" as input and returns a map[string]interface{}" as output
+// Ideally it should process the input and either return a new map, or just add it's own keys to it,
+// if we want to retain the data from previous node.
+// This base implementation, just returns an error, so you need to override it with your own.
+// Any struct may define both Execute & ExecuteLoop.Execute
+// Execute will be used if mode is set to conveyor.WorkerModeTransaction
+func (cnh *ConcreteNodeExecutor) Execute(ctx CnvContext, inData map[string]interface{}) (map[string]interface{}, error) {
+	return nil, ErrExecuteNotImplemented
+}
+
+// ExecuteLoop should take two "map[string]interface{}" channels.
+// It is a more hands-on version of Execute() method,
+// where you have to handle reading from input channel and writing to output channel, after processing on your own
+// This base implementation, just returns an error, so you need to override it with your own.
+// Any struct may define both Execute & ExecuteLoop.
+// ExecuteLoop will be used if mode is set to conveyor.WorkerModeLoop
+func (cnh *ConcreteNodeExecutor) ExecuteLoop(ctx CnvContext, inChan <-chan map[string]interface{}, outChan chan<- map[string]interface{}) error {
+	return ErrExecuteNotImplemented
+}
+
 // ConcreteJointExecutor struct represents a concrete node structure
 type ConcreteJointExecutor struct {
 	Name string

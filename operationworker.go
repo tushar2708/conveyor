@@ -7,36 +7,29 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-// // FetchExecutor interface binds to nodes that have the capability to fetch intermidiate data, and forward it to next node
-// type FetchExecutor interface {
-// 	FetchAndSend(inputChannel chan interface{}, outputChannel []chan interface{})
-// 	Start()
-// 	Stop()
-// 	GetPool() *FetchWorkerPool
-// }
 
-// FetchWorkerPool struct provides the worker pool infra for Fetch interface
-type FetchWorkerPool struct {
+// OperationWorkerPool struct provides the worker pool infra for Operation interface
+type OperationWorkerPool struct {
 	*ConcreteNodeWorker
 	nextWorkerCount int
 	inputChannel    chan map[string]interface{}
 	outputChannel   chan map[string]interface{}
 }
 
-// FetchNode structue
-type FetchNode struct {
-	Pool *FetchWorkerPool
+// OperationNode structue
+type OperationNode struct {
+	Pool *OperationWorkerPool
 }
 
-// NewFetchWorkerPool creates a new FetchWorkerPool
-func NewFetchWorkerPool(executor NodeExecutor, mode WorkerMode) NodeWorker {
+// NewOperationWorkerPool creates a new OperationWorkerPool
+func NewOperationWorkerPool(executor NodeExecutor, mode WorkerMode) NodeWorker {
 
 	wCnt := executor.Count()
 	if wCnt < 1 {
 		wCnt = 1
 	}
 
-	fwp := &FetchWorkerPool{
+	fwp := &OperationWorkerPool{
 		ConcreteNodeWorker: &ConcreteNodeWorker{
 			WPool: &WPool{
 				Name: executor.GetName() + "_worker",
@@ -50,35 +43,35 @@ func NewFetchWorkerPool(executor NodeExecutor, mode WorkerMode) NodeWorker {
 	return fwp
 }
 
-// CreateChannels creates channels for the fetch worker
-func (fwp *FetchWorkerPool) CreateChannels(buffer int) {
+// CreateChannels creates channels for the Operation WorkerPool
+func (fwp *OperationWorkerPool) CreateChannels(buffer int) {
 	fwp.inputChannel = make(chan map[string]interface{}, buffer)
 }
 
-// GetInputChannel returns the input channel of Fetch WorkerPool
-func (fwp *FetchWorkerPool) GetInputChannel() (chan map[string]interface{}, error) {
+// GetInputChannel returns the input channel of Operation WorkerPool
+func (fwp *OperationWorkerPool) GetInputChannel() (chan map[string]interface{}, error) {
 	return fwp.inputChannel, nil
 }
 
-// GetOutputChannel returns the output channel of Fetch WorkerPool
-func (fwp *FetchWorkerPool) GetOutputChannel() (chan map[string]interface{}, error) {
+// GetOutputChannel returns the output channel of Operation WorkerPool
+func (fwp *OperationWorkerPool) GetOutputChannel() (chan map[string]interface{}, error) {
 	return fwp.outputChannel, nil
 }
 
-// SetInputChannel updates the input channel of Source WorkerPool
-func (fwp *FetchWorkerPool) SetInputChannel(inChan chan map[string]interface{}) error {
+// SetInputChannel updates the input channel of Operation WorkerPool
+func (fwp *OperationWorkerPool) SetInputChannel(inChan chan map[string]interface{}) error {
 	fwp.inputChannel = inChan
 	return nil
 }
 
-// SetOutputChannel updates the output channel of Source WorkerPool
-func (fwp *FetchWorkerPool) SetOutputChannel(outChan chan map[string]interface{}) error {
+// SetOutputChannel updates the output channel of Operation WorkerPool
+func (fwp *OperationWorkerPool) SetOutputChannel(outChan chan map[string]interface{}) error {
 	fwp.outputChannel = outChan
 	return nil
 }
 
-// Start Fetch Worker Pool
-func (fwp *FetchWorkerPool) Start(ctx CnvContext) error {
+// Start Operation Worker Pool
+func (fwp *OperationWorkerPool) Start(ctx CnvContext) error {
 	if fwp.Mode == WorkerModeTransaction {
 		return fwp.startTransactionMode(ctx)
 	} else if fwp.Mode == WorkerModeLoop {
@@ -88,8 +81,8 @@ func (fwp *FetchWorkerPool) Start(ctx CnvContext) error {
 	}
 }
 
-// startLoopMode FetchWorkerPool
-func (fwp *FetchWorkerPool) startLoopMode(ctx CnvContext) error {
+// startLoopMode OperationWorkerPool
+func (fwp *OperationWorkerPool) startLoopMode(ctx CnvContext) error {
 
 	for i := 0; i < fwp.WorkerCount; i++ {
 		fwp.Wg.Add(1)
@@ -109,8 +102,8 @@ func (fwp *FetchWorkerPool) startLoopMode(ctx CnvContext) error {
 	return nil
 }
 
-// startTransactionMode starts FetchWorkerPool in transaction mode
-func (fwp *FetchWorkerPool) startTransactionMode(ctx CnvContext) error {
+// startTransactionMode starts OperationWorkerPool in transaction mode
+func (fwp *OperationWorkerPool) startTransactionMode(ctx CnvContext) error {
 
 	fwp.sem = semaphore.NewWeighted(int64(fwp.WorkerCount))
 
@@ -125,7 +118,7 @@ workerLoop:
 
 		in, ok := <-fwp.inputChannel
 		if !ok {
-			ctx.SendLog(0, fmt.Sprintf("Executor:[%s] fetch's input channel closed", fwp.Executor.GetUniqueIdentifier()), nil)
+			ctx.SendLog(0, fmt.Sprintf("Executor:[%s] Operation's input channel closed", fwp.Executor.GetUniqueIdentifier()), nil)
 			break workerLoop
 		}
 
@@ -133,10 +126,10 @@ workerLoop:
 			ctx.SendLog(0, fmt.Sprintf("Executor:[%s], sem acquire failed", fwp.Executor.GetUniqueIdentifier()), err)
 			break workerLoop
 		}
-		// fmt.Println("fetch sem acquire 1")
+		// fmt.Println("Operation sem acquire 1")
 
 		go func(data map[string]interface{}) {
-			// defer fmt.Println("fetch sem release 1")
+			// defer fmt.Println("Operation sem release 1")
 			defer fwp.sem.Release(1)
 
 			out, err := fwp.Executor.Execute(ctx, data)
@@ -160,12 +153,12 @@ workerLoop:
 }
 
 // WorkerType returns the type of worker
-func (fwp *FetchWorkerPool) WorkerType() string {
-	return FetchWorkerType
+func (fwp *OperationWorkerPool) WorkerType() string {
+	return WorkerTypeOperation
 }
 
-// WaitAndStop FetchWorkerPool
-func (fwp *FetchWorkerPool) WaitAndStop(ctx CnvContext) error {
+// WaitAndStop OperationWorkerPool
+func (fwp *OperationWorkerPool) WaitAndStop(ctx CnvContext) error {
 
 	select {
 	case <-ctx.Done():
@@ -181,10 +174,10 @@ func (fwp *FetchWorkerPool) WaitAndStop(ctx CnvContext) error {
 		fwp.Wg.Wait()
 	}
 
-	ctx.SendLog(3, fmt.Sprintf("Fetch Worker:[%s] done, calling cleanup", fwp.Name), nil)
+	ctx.SendLog(3, fmt.Sprintf("Operation Worker:[%s] done, calling cleanup", fwp.Name), nil)
 
 	if cleanupErr := fwp.Executor.CleanUp(); cleanupErr != nil {
-		ctx.SendLog(0, fmt.Sprintf("Fetch Worker:[%s] cleanup call failed. cleanupErr:[%v]", fwp.Name, cleanupErr), nil)
+		ctx.SendLog(0, fmt.Sprintf("Operation Worker:[%s] cleanup call failed. cleanupErr:[%v]", fwp.Name, cleanupErr), nil)
 	}
 	close(fwp.outputChannel)
 	return nil

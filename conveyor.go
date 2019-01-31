@@ -3,6 +3,7 @@ package conveyor
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -192,8 +193,107 @@ func (cnv *Conveyor) GetLastWorker() (NodeWorker, error) {
 	return nil, ErrEmptyConveyor
 }
 
-// AddWorker employs a new worker station to the conveyor
-func (cnv *Conveyor) AddWorker(worker NodeWorker, toLink bool) error {
+// AddNodeExecutor creates a worker for a given executor (based on workerMode & workerType)
+// And then links it to the last "Node" added to the conveyor, by creating and mapping connecting channels
+// In case there was no node added previously, it skips the linking part
+func (cnv *Conveyor) AddNodeExecutor(nodeExecutor NodeExecutor, workerMode WorkerMode, workerType string) error {
+	nodeWorker, err := newNodeWorker(nodeExecutor, workerMode, workerType)
+	if err != nil {
+		return err
+	}
+
+	if addErr := cnv.AddNodeWorker(nodeWorker, true); addErr != nil {
+		fmt.Printf("Adding %s [type:%s] to conveyor failed. Error:[%v]\n",
+			nodeExecutor.GetName(), workerType, addErr)
+		return addErr
+	}
+	return nil
+}
+
+// AddJointExecutor creates a worker for a given executor (based on workerMode & workerType)
+// And then links it to the last "Node" added to the conveyor, by creating and mapping connecting channels
+// In case there was no node added previously, it skips the linking part
+func (cnv *Conveyor) AddJointExecutor(jointExecutor JointExecutor) error {
+
+	jointWorker := NewJointWorkerPool(jointExecutor)
+
+	if err := cnv.AddJointWorker(jointWorker); err != nil {
+		fmt.Printf("Adding %s to conveyor failed. Error:[%v]\n",
+			jointExecutor.GetName(), err)
+		return err
+	}
+	return nil
+}
+
+// AddNodeExecutorToJoint creates a worker for a given executor (based on workerMode & workerType)
+// And then links it to the last "Joint" added to the conveyor, by creating and mapping connecting channels
+// In case there was no "Joint" added previously, it returns an error
+func (cnv *Conveyor) AddJointExecutorAfterNode(jointExecutor JointExecutor, workerMode WorkerMode, workerType string) error {
+
+	nodeCount := len(cnv.workers)
+
+	if nodeCount == 0 {
+		return ErrNoNodesAvailable
+	}
+
+	jointWorker := NewJointWorkerPool(jointExecutor)
+
+	if addErr := cnv.AddJointWorker(jointWorker); addErr != nil {
+		fmt.Printf("Adding joint-%s after node[type:%s] to conveyor failed. Error:[%v]\n",
+			jointExecutor.GetName(), workerType, addErr)
+		return addErr
+	}
+
+	// Pick the last node that was added to this conveyor
+	nodeWorker := cnv.workers[nodeCount-1]
+
+	// Link last node before sinks to 0th input channel of the broadcast joint
+	linkErr := LinkJointAfterNode(nodeWorker, jointWorker, 0)
+	if linkErr != nil {
+		return linkErr
+	}
+
+	return nil
+}
+
+// AddNodeExecutorToJoint creates a worker for a given executor (based on workerMode & workerType)
+// And then links it to the last "Joint" added to the conveyor, by creating and mapping connecting channels
+// In case there was no "Joint" added previously, it returns an error
+func (cnv *Conveyor) AddNodeExecutorAfterJoint(nodeExecutor NodeExecutor, workerMode WorkerMode, workerType string) error {
+
+	jointCount := len(cnv.joints)
+
+	if jointCount == 0 {
+		return ErrNoJointsAvailable
+	}
+
+	nodeWorker, err := newNodeWorker(nodeExecutor, workerMode, workerType)
+	if err != nil {
+		return err
+	}
+
+	// Add nodeWorker to list, but don't link it's channels yet
+	if addErr := cnv.AddNodeWorker(nodeWorker, false); addErr != nil {
+		fmt.Printf("Adding node-%s[type:%s] after joint to conveyor failed. Error:[%v]\n",
+			nodeExecutor.GetName(), workerType, addErr)
+		return addErr
+	}
+
+	// Pick the last joint that was added to this conveyor
+	jointWorker := cnv.joints[jointCount-1]
+
+	// Now link the newly created node after last joint
+	if err := LinkNodeAfterJoint(jointWorker, nodeWorker); err != nil {
+		fmt.Printf("Adding node-%s[type:%s] after joint to conveyor failed. Error:[%v]\n",
+			nodeExecutor.GetName(), workerType, err)
+		return err
+	}
+
+	return nil
+}
+
+// AddNodeWorker employs a new worker station to the conveyor
+func (cnv *Conveyor) AddNodeWorker(worker NodeWorker, toLink bool) error {
 	worker.CreateChannels(cnv.bufferLen)
 	cnv.workers = append(cnv.workers, worker)
 
@@ -268,8 +368,8 @@ func (cnv *Conveyor) Start() error {
 	return nil
 }
 
-// Stop Conveyor by cancelling context. It's used to kill a campaign while it's running.
-// No need to call it if campaign is finishing on it's own
+// Stop Conveyor by cancelling context. It's used to kill a pipeline while it's running.
+// No need to call it if the pipeline is finishing on it's own
 func (cnv *Conveyor) Stop() time.Duration {
 	// Cancel ctx
 	cnv.cleanup(true) // cleanup() will be called from here, in case of killing conveyor
@@ -285,9 +385,9 @@ func (cnv *Conveyor) cleanup(abruptKill bool) {
 			close(cnv.progress)
 		})
 	}
-	if abruptKill == false {
+	if abruptKill == false && cnv.lcHandler != nil {
 		if err := cnv.MarkFinished(); err != nil {
-			log.Printf("Campaign:[%s] unable to set status as 'finished' to redis: %v\n", cnv.Name, err)
+			log.Printf("Conveyor:[%s] unable to set status as 'finished': Error:[%v]\n", cnv.Name, err)
 		}
 	}
 }

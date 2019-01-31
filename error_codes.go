@@ -3,20 +3,28 @@ package conveyor
 import "errors"
 
 var (
+	// ErrInvalidWorkerType error
+	ErrInvalidWorkerType = errors.New("Invalid worker type. pick one from conveyor.WorkerTypeSource/conveyor.WorkerTypeOperation/conveyor.WorkerTypeSink")
+
+	// ErrInvalidWorkerMode error
+	ErrInvalidWorkerMode = errors.New("Invalid worker mode. pick either conveyor.WorkerModeTransaction or conveyor.WorkerModeLoop")
+
+	// ErrNoNodesAvailable error
+	ErrNoNodesAvailable = errors.New("Your action assumes presence of Node Executors in conveyor, but none were found")
+
+	// ErrNoJointsAvailable error
+	ErrNoJointsAvailable = errors.New("Your action assumes presence of Joint Executors in conveyor, but none were found")
 
 	// ErrExecuteNotImplemented error
 	ErrExecuteNotImplemented = errors.New("This executor doesn't implement Execute() method")
 
-	// ErrInvalidWorkerMode error
-	ErrInvalidWorkerMode = errors.New("Invalid worker mode. pick either conveyor.WorkerModeTransaction or conveyor.WorkerModeLoop")
+	// ErrExecuteLoopNotImplemented error
+	ErrExecuteLoopNotImplemented = errors.New("This executor doesn't implement ExecuteLoop() method")
 
 	// ErrInputChanDoesNotExist error
 	ErrInputChanDoesNotExist = errors.New("input channel doesn't exist for this node")
 	// ErrOutputChanDoesNotExist error
 	ErrOutputChanDoesNotExist = errors.New("output channel doesn't exist for this node")
-
-	// ErrExecuteLoopNotImplemented error
-	ErrExecuteLoopNotImplemented = errors.New("This executor doesn't implement ExecuteLoop() method")
 
 	// ErrSourceExhausted error
 	ErrSourceExhausted = errors.New("Source executor is exhausted")

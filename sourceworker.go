@@ -152,7 +152,7 @@ workerLoop:
 
 // WorkerType returns the type of worker
 func (swp *SourceWorkerPool) WorkerType() string {
-	return SourceWorkerType
+	return WorkerTypeSource
 }
 
 // WaitAndStop SourceWorkerPool

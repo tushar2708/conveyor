@@ -141,7 +141,7 @@ func (swp *SinkWorkerPool) SetOutputChannel(outChan chan map[string]interface{})
 
 // WorkerType returns the type of worker
 func (swp *SinkWorkerPool) WorkerType() string {
-	return SinkWorkerType
+	return WorkerTypeSink
 }
 
 // WaitAndStop SinkWorkerPool

@@ -7,14 +7,14 @@ import (
 )
 
 const (
-	// SourceWorkerType constant
-	SourceWorkerType = "SOURCE_WORKER"
-	// FetchWorkerType constant
-	FetchWorkerType = "FETCH_WORKER"
-	// SinkWorkerType constant
-	SinkWorkerType = "SINK_WORKER"
-	// PlumbingWorkerType constant
-	PlumbingWorkerType = "PLUMBING_WORKER"
+	// WorkerTypeSource constant
+	WorkerTypeSource = "SOURCE_WORKER"
+	// WorkerTypeOperation constant
+	WorkerTypeOperation = "OPERATION_WORKER"
+	// WorkerTypeSink constant
+	WorkerTypeSink = "SINK_WORKER"
+	// WorkerTypeJoint constant
+	WorkerTypeJoint = "JOINT_WORKER"
 )
 
 // WorkerMode decides if worker would run in loop mode or single transaction mode

@@ -34,6 +34,6 @@ debug
 build
 vendor
 logs
-
+.idea/
 
 

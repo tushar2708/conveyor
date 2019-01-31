@@ -10,7 +10,7 @@ import (
 // 	FetchAndSend(inputChannel chan interface{}, outputChannel []chan interface{})
 // 	Start()
 // 	Stop()
-// 	GetPool() *FetchWorkerPool
+// 	GetPool() *OperationWorkerPool
 // }
 
 // JointWorkerPool struct provides the worker pool infra for Fetch interface
@@ -21,7 +21,7 @@ type JointWorkerPool struct {
 	outputChannels  []chan map[string]interface{}
 }
 
-// NewJointWorkerPool creates a new FetchWorkerPool
+// NewJointWorkerPool creates a new OperationWorkerPool
 func NewJointWorkerPool(executor JointExecutor) JointWorker {
 	jwp := &JointWorkerPool{
 		ConcreteJointWorker: &ConcreteJointWorker{
@@ -92,7 +92,7 @@ func (jwp *JointWorkerPool) Start(ctx CnvContext) error {
 	return nil
 }
 
-// WaitAndStop FetchWorkerPool
+// WaitAndStop OperationWorkerPool
 func (jwp *JointWorkerPool) WaitAndStop() error {
 	jwp.Wg.Wait()
 

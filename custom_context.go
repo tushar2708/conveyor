@@ -36,7 +36,7 @@ type CnvContext interface {
 	Cancel()
 	SendLog(int32, string, error)
 	SendStatus(string)
-	GetData() CtxData
+	GetData() interface{}
 }
 
 // cnvContext is a wrapper over context.Context
@@ -49,7 +49,7 @@ type cnvContext struct {
 }
 
 // GetData
-func (ctx *cnvContext) GetData() CtxData {
+func (ctx *cnvContext) GetData() interface{} {
 	return ctx.Data
 }
 
@@ -121,6 +121,8 @@ func (ctx *cnvContext) SendLog(logLevel int32, text string, err error) {
 		return
 	case ctx.Data.logs <- msg:
 	default:
+		<-ctx.Data.logs // If not consumed, throw away old status and update with new value
+		ctx.Data.logs <- msg
 	}
 }
 

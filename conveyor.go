@@ -33,7 +33,12 @@ type Conveyor struct {
 
 // Status returns a channel on which Conveyor Statuses will be published
 func (cnv *Conveyor) Status() <-chan string {
-	return cnv.ctx.GetData().status
+	iCtxData := cnv.ctx.GetData()
+	if iCtxData != nil {
+		ctxData, _ := iCtxData.(CtxData)
+		return ctxData.status
+	}
+	return nil
 }
 
 // GetConveyorContext gives the conveyor's context object
@@ -56,7 +61,12 @@ func (cnv *Conveyor) Progress() <-chan float64 {
 
 // Logs returns a channel on which Conveyor Statuses will be published
 func (cnv *Conveyor) Logs() <-chan Message {
-	return cnv.ctx.GetData().logs
+	iCtxData := cnv.ctx.GetData()
+	if iCtxData != nil {
+		ctxData, _ := iCtxData.(CtxData)
+		return ctxData.logs
+	}
+	return nil
 }
 
 var (

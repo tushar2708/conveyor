@@ -18,23 +18,9 @@ type SourceWorkerPool struct {
 // NewSourceWorkerPool creates a new SourceWorkerPool
 func NewSourceWorkerPool(executor NodeExecutor, mode WorkerMode) NodeWorker {
 
-	wCnt := executor.Count()
-	if wCnt < 1 {
-		wCnt = 1
-	}
+	cnw := newConcreteNodeWorker(executor, mode)
+	swp := &SourceWorkerPool{ConcreteNodeWorker: cnw}
 
-	swp := &SourceWorkerPool{
-		ConcreteNodeWorker: &ConcreteNodeWorker{
-			WPool: &WPool{
-				Name: executor.GetName() + "_worker",
-			},
-			WorkerCount: wCnt,
-			Mode:        mode,
-			Executor:    executor,
-		},
-	}
-
-	swp.sigChannel = make(chan interface{}, 1)
 	return swp
 }
 
@@ -73,23 +59,8 @@ func (swp *SourceWorkerPool) Start(ctx CnvContext) error {
 // startLoopMode SourceWorkerPool
 func (swp *SourceWorkerPool) startLoopMode(ctx CnvContext) error {
 
-	for i := 0; i < swp.WorkerCount; i++ {
-		swp.Wg.Add(1)
-		// fmt.Println("src wg add 1")
-		go func() {
-			// defer fmt.Println("src wg done 1")
-			defer swp.Wg.Done()
-			if err := swp.Executor.ExecuteLoop(ctx, nil, swp.outputChannel); err != nil {
-				if err == ErrExecuteLoopNotImplemented {
-					ctx.SendLog(0, fmt.Sprintf("Executor:[%s] ", swp.Executor.GetUniqueIdentifier()), err)
+	return swp.ConcreteNodeWorker.startLoopMode(ctx, nil, swp.outputChannel)
 
-					log.Fatalf("Improper setup of Executor[%s], ExecuteLoop() method is required", swp.Executor.GetName())
-				}
-				return
-			}
-		}()
-	}
-	return nil
 }
 
 // startTransactionMode starts SourceWorkerPool in transaction mode
@@ -123,14 +94,14 @@ workerLoop:
 
 		go func() {
 			defer swp.sem.Release(1)
-			out, err := swp.Executor.Execute(ctx, nil)
+			outData, err := swp.Executor.Execute(ctx, nil)
 			if err == nil {
 				select {
 				case <-ctx.Done():
 					return
 				default:
 				}
-				swp.outputChannel <- out
+				swp.outputChannel <- outData
 			} else if err == ErrExecuteNotImplemented {
 				ctx.SendLog(0, fmt.Sprintf("Executor:[%s]", swp.Executor.GetUniqueIdentifier()), err)
 				log.Fatalf("Improper setup of Executor[%s], Execute() method is required", swp.Executor.GetUniqueIdentifier())
@@ -142,6 +113,9 @@ workerLoop:
 				ctx.Cancel()
 				return
 			}
+			ctx.SendLog(2, fmt.Sprintf("Worker:[%s] for Executor:[%s] Execute() Call Failed.",
+				swp.Name, swp.Executor.GetUniqueIdentifier()), err)
+
 			return
 		}()
 
@@ -158,25 +132,8 @@ func (swp *SourceWorkerPool) WorkerType() string {
 // WaitAndStop SourceWorkerPool
 func (swp *SourceWorkerPool) WaitAndStop(ctx CnvContext) error {
 
-	select {
-	case <-ctx.Done():
-		return nil
-	default:
-	}
+	_ = swp.ConcreteNodeWorker.WaitAndStop(ctx)
 
-	if swp.Mode == WorkerModeTransaction {
-		if err := swp.sem.Acquire(ctx, int64(swp.WorkerCount)); err != nil {
-			ctx.SendLog(0, fmt.Sprintf("Worker:[%s] for Executor:[%s] Failed to acquire semaphore", swp.Name, swp.Executor.GetUniqueIdentifier()), err)
-		}
-	} else {
-		swp.Wg.Wait()
-	}
-	ctx.SendLog(3, fmt.Sprintf("Source Worker:[%s] done, calling cleanup", swp.Name), nil)
-
-	if cleanupErr := swp.Executor.CleanUp(); cleanupErr != nil {
-		ctx.SendLog(0, fmt.Sprintf("Source Worker:[%s] cleanup call failed. cleanupErr:[%v]", swp.Name, cleanupErr), nil)
-	}
-	// fmt.Println("going to close src out channel")
 	close(swp.outputChannel)
 	return nil
 }

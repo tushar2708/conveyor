@@ -7,7 +7,6 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-
 // OperationWorkerPool struct provides the worker pool infra for Operation interface
 type OperationWorkerPool struct {
 	*ConcreteNodeWorker
@@ -24,21 +23,8 @@ type OperationNode struct {
 // NewOperationWorkerPool creates a new OperationWorkerPool
 func NewOperationWorkerPool(executor NodeExecutor, mode WorkerMode) NodeWorker {
 
-	wCnt := executor.Count()
-	if wCnt < 1 {
-		wCnt = 1
-	}
-
-	fwp := &OperationWorkerPool{
-		ConcreteNodeWorker: &ConcreteNodeWorker{
-			WPool: &WPool{
-				Name: executor.GetName() + "_worker",
-			},
-			WorkerCount: wCnt,
-			Mode:        mode,
-			Executor:    executor,
-		},
-	}
+	cnw := newConcreteNodeWorker(executor, mode)
+	fwp := &OperationWorkerPool{ConcreteNodeWorker: cnw}
 
 	return fwp
 }
@@ -84,22 +70,8 @@ func (fwp *OperationWorkerPool) Start(ctx CnvContext) error {
 // startLoopMode OperationWorkerPool
 func (fwp *OperationWorkerPool) startLoopMode(ctx CnvContext) error {
 
-	for i := 0; i < fwp.WorkerCount; i++ {
-		fwp.Wg.Add(1)
-		go func() {
-			defer fwp.Wg.Done()
+	return fwp.ConcreteNodeWorker.startLoopMode(ctx, fwp.inputChannel, fwp.outputChannel)
 
-			if err := fwp.Executor.ExecuteLoop(ctx, fwp.inputChannel, fwp.outputChannel); err != nil {
-				if err == ErrExecuteLoopNotImplemented {
-					ctx.SendLog(0, fmt.Sprintf("Executor:[%s] ", fwp.Executor.GetUniqueIdentifier()), err)
-					log.Fatalf("Improper setup of Executor[%s], ExecuteLoop() method is required", fwp.Executor.GetName())
-				} else {
-					return
-				}
-			}
-		}()
-	}
-	return nil
 }
 
 // startTransactionMode starts OperationWorkerPool in transaction mode
@@ -116,7 +88,7 @@ workerLoop:
 		default:
 		}
 
-		in, ok := <-fwp.inputChannel
+		inData, ok := <-fwp.inputChannel
 		if !ok {
 			ctx.SendLog(0, fmt.Sprintf("Executor:[%s] Operation's input channel closed", fwp.Executor.GetUniqueIdentifier()), nil)
 			break workerLoop
@@ -144,8 +116,11 @@ workerLoop:
 				ctx.SendLog(0, fmt.Sprintf("Executor:[%s]", fwp.Executor.GetUniqueIdentifier()), err)
 				log.Fatalf("Improper setup of Executor[%s], Execute() method is required", fwp.Executor.GetUniqueIdentifier())
 			}
+			ctx.SendLog(2, fmt.Sprintf("Worker:[%s] for Executor:[%s] Execute() Call Failed.",
+				fwp.Name, fwp.Executor.GetUniqueIdentifier()), err)
+
 			return
-		}(in)
+		}(inData)
 
 	}
 
@@ -160,25 +135,8 @@ func (fwp *OperationWorkerPool) WorkerType() string {
 // WaitAndStop OperationWorkerPool
 func (fwp *OperationWorkerPool) WaitAndStop(ctx CnvContext) error {
 
-	select {
-	case <-ctx.Done():
-		return nil
-	default:
-	}
+	_ = fwp.ConcreteNodeWorker.WaitAndStop(ctx)
 
-	if fwp.Mode == WorkerModeTransaction {
-		if err := fwp.sem.Acquire(ctx, int64(fwp.WorkerCount)); err != nil {
-			ctx.SendLog(0, fmt.Sprintf("Worker:[%s] for Executor:[%s] Failed to acquire semaphore", fwp.Name, fwp.Executor.GetUniqueIdentifier()), err)
-		}
-	} else {
-		fwp.Wg.Wait()
-	}
-
-	ctx.SendLog(3, fmt.Sprintf("Operation Worker:[%s] done, calling cleanup", fwp.Name), nil)
-
-	if cleanupErr := fwp.Executor.CleanUp(); cleanupErr != nil {
-		ctx.SendLog(0, fmt.Sprintf("Operation Worker:[%s] cleanup call failed. cleanupErr:[%v]", fwp.Name, cleanupErr), nil)
-	}
 	close(fwp.outputChannel)
 	return nil
 }

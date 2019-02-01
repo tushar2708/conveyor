@@ -1,12 +1,8 @@
 hash: 1c46833cf8fa0255503047985461d00172619c9bb8a98265e2de4c42b159f1fb
-updated: 2018-10-07T18:03:36.373238694+05:30
+updated: 2019-02-01T21:03:08.317797+05:30
 imports:
-- name: golang.org/x/net
-  version: 1c05540f6879653db88113bc4a2b70aec4bd491f
-  subpackages:
-  - context
 - name: golang.org/x/sync
-  version: 1d60e4601c6fd243af51cc01ddf169918a5407ca
+  version: 42b317875d0fa942474b76e1b46a6060d720ae6e
   subpackages:
   - semaphore
 testImports: []

@@ -1,6 +1,8 @@
 package conveyor
 
 import (
+	"fmt"
+	"log"
 	"sync"
 
 	"golang.org/x/sync/semaphore"
@@ -32,17 +34,15 @@ const (
 	// and has to handle the copying of data from/to channels (except, closing them), executor will also need to ensure
 	// that it monitors ctx.Done() to shutdown worker, in case of any error.
 	// Needs more code, use only if you are ready to peek into how it works.
-	// Some use cases are, where you can't fetch data on-demand with a function call. Eg. Running an NPI server as source
+	// Some use cases are, where you can't fetch data on-demand with a function call. Eg. Running an API server as source
 	WorkerModeLoop
 )
 
 // WPool to run different nodes of comex graph
 type WPool struct {
 	Name string
-	// Executor    common.NodeExecutor
-	sigChannel chan interface{}
-	Wg         sync.WaitGroup
-	sem        *semaphore.Weighted
+	Wg   sync.WaitGroup
+	sem  *semaphore.Weighted
 }
 
 // ConcreteNodeWorker to run different nodes of comex graph
@@ -84,16 +84,85 @@ type JointWorker interface {
 	AddOutputChannel(chan map[string]interface{}) error
 }
 
+func newConcreteNodeWorker(executor NodeExecutor, mode WorkerMode) *ConcreteNodeWorker {
+
+	wCnt := executor.Count()
+	if wCnt < 1 {
+		wCnt = 1
+	}
+	cnw := &ConcreteNodeWorker{
+		WPool: &WPool{
+			Name: executor.GetName() + "_worker",
+		},
+		WorkerCount: wCnt,
+		Mode:        mode,
+		Executor:    executor,
+	}
+
+	return cnw
+}
+
 // Start the worker
-func (wp *ConcreteNodeWorker) Start() {
-	for i := 0; i < wp.Executor.Count(); i++ {
-		wp.Wg.Add(1)
-		go wp.run()
+func (cnw *ConcreteNodeWorker) Start() {
+	for i := 0; i < cnw.Executor.Count(); i++ {
+		cnw.Wg.Add(1)
+		go cnw.run()
 	}
 }
 
+// startLoopMode starts ConcreteNodeWorker in loop mode
+func (cnw *ConcreteNodeWorker) startLoopMode(ctx CnvContext, inputChannel chan map[string]interface{},
+	outChannel chan map[string]interface{}) error {
+
+	for i := 0; i < cnw.WorkerCount; i++ {
+		cnw.Wg.Add(1)
+		// fmt.Println("src wg add 1")
+		go func() {
+			// defer fmt.Println("src wg done 1")
+			defer cnw.Wg.Done()
+			if err := cnw.Executor.ExecuteLoop(ctx, inputChannel, outChannel); err != nil {
+				if err == ErrExecuteLoopNotImplemented {
+					ctx.SendLog(0, fmt.Sprintf("Executor:[%s] ", cnw.Executor.GetUniqueIdentifier()), err)
+
+					log.Fatalf("Improper setup of Executor[%s], ExecuteLoop() method is required",
+						cnw.Executor.GetName())
+				}
+				return
+			}
+		}()
+	}
+
+	return nil
+}
+
 // CreateChannels creates channels for the worker
-func (wp *ConcreteNodeWorker) CreateChannels(buffer int) {}
+func (cnw *ConcreteNodeWorker) CreateChannels(buffer int) {}
+
+// WaitAndStop ConcreteNodeWorker
+func (cnw *ConcreteNodeWorker) WaitAndStop(ctx CnvContext) error {
+
+	select {
+	case <-ctx.Done():
+		return nil
+	default:
+	}
+
+	if cnw.Mode == WorkerModeTransaction {
+		if err := cnw.sem.Acquire(ctx, int64(cnw.WorkerCount)); err != nil {
+			ctx.SendLog(0, fmt.Sprintf("Worker:[%s] for Executor:[%s] Failed to acquire semaphore",
+				cnw.Name, cnw.Executor.GetUniqueIdentifier()), err)
+		}
+	} else {
+		cnw.Wg.Wait()
+	}
+	ctx.SendLog(3, fmt.Sprintf("Worker:[%s] done, calling cleanup", cnw.Name), nil)
+
+	if cleanupErr := cnw.Executor.CleanUp(); cleanupErr != nil {
+		ctx.SendLog(0, fmt.Sprintf("Worker:[%s] cleanup call failed. cleanupErr:[%v]",
+			cnw.Name, cleanupErr), nil)
+	}
+	return nil
+}
 
 // Start the worker
 func (wp *ConcreteJointWorker) Start() {

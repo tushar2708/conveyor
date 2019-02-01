@@ -5,10 +5,19 @@ import (
 	"github.com/tushar2708/conveyor"
 )
 
-func PrepareLoopingConveyor() (*conveyor.Conveyor, error) {
+func getInitialConveyor() (*conveyor.Conveyor, error) {
 	cnv, err := conveyor.NewConveyor("square_printer", 10)
 	if err != nil {
 		return nil, err
+	}
+	return cnv, nil
+}
+
+func PrepareLoopingConveyor() (*conveyor.Conveyor, error) {
+
+	cnv, cErr := getInitialConveyor()
+	if cErr != nil {
+		return nil, cErr
 	}
 
 	// Create a source executor, and add it to conveyor.
@@ -50,9 +59,10 @@ func PrepareLoopingConveyor() (*conveyor.Conveyor, error) {
 }
 
 func PrepareTransactionalConveyor() (*conveyor.Conveyor, error) {
-	cnv, err := conveyor.NewConveyor("square_printer", 10)
-	if err != nil {
-		return nil, err
+
+	cnv, cErr := getInitialConveyor()
+	if cErr != nil {
+		return nil, cErr
 	}
 
 	gen := &NumberSource{
@@ -84,9 +94,10 @@ func PrepareTransactionalConveyor() (*conveyor.Conveyor, error) {
 }
 
 func PrepareComplexTransactionalConveyor() (*conveyor.Conveyor, error) {
-	cnv, err := conveyor.NewConveyor("square_printer", 10)
-	if err != nil {
-		return nil, err
+
+	cnv, cErr := getInitialConveyor()
+	if cErr != nil {
+		return nil, cErr
 	}
 
 	gen := &NumberSource{
@@ -126,7 +137,7 @@ func PrepareComplexTransactionalConveyor() (*conveyor.Conveyor, error) {
 	  */
 	joint, jntErr := conveyor.NewReplicateJoint("replicator", 3)
 	if jntErr != nil {
-		fmt.Printf("Failed to add SquareOperator to conveyor :[+%v]", err)
+		fmt.Printf("Failed to add SquareOperator to conveyor :[+%v]", jntErr)
 		return nil, jntErr
 	}
 

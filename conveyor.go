@@ -386,7 +386,7 @@ func (cnv *Conveyor) cleanup(abruptKill bool) {
 		})
 	}
 	if abruptKill == false && cnv.lcHandler != nil {
-		if err := cnv.MarkFinished(); err != nil {
+		if err := cnv.MarkCurrentState(StateFinished); err != nil {
 			log.Printf("Conveyor:[%s] unable to set status as 'finished': Error:[%v]\n", cnv.Name, err)
 		}
 	}
@@ -423,53 +423,18 @@ trackProgress:
 			cnv.progress <- percentDone
 		}
 	}
-
 }
 
-// MarkPreparing marks conveyor status as "preparing"
-func (cnv *Conveyor) MarkPreparing() error {
+func (cnv *Conveyor) MarkCurrentState(state string) error {
 	if cnv.lcHandler == nil {
 		return ErrLifeCycleNotSupported
 	}
-	return cnv.lcHandler.MarkPreparing()
-}
 
-// MarkStarted marks conveyor status as "started"
-func (cnv *Conveyor) MarkStarted() error {
-	if cnv.lcHandler == nil {
-		return ErrLifeCycleNotSupported
+	statusMarkerFunc := getStateMarker(state, cnv.lcHandler)
+	if statusMarkerFunc == nil {
+		return fmt.Errorf("given state '%s' is not supported by conveyor. "+
+			"Look for 'Valid States for a Conveyor' in docs", state)
 	}
-	return cnv.lcHandler.MarkStarted()
-}
 
-// MarkToKill marks conveyor status as "to kill"
-func (cnv *Conveyor) MarkToKill() error {
-	if cnv.lcHandler == nil {
-		return ErrLifeCycleNotSupported
-	}
-	return cnv.lcHandler.MarkToKill()
-}
-
-// MarkKilled marks conveyor status as "killed"
-func (cnv *Conveyor) MarkKilled() error {
-	if cnv.lcHandler == nil {
-		return ErrLifeCycleNotSupported
-	}
-	return cnv.lcHandler.MarkKilled()
-}
-
-// MarkFinished marks conveyor status as "finished"
-func (cnv *Conveyor) MarkFinished() error {
-	if cnv.lcHandler == nil {
-		return ErrLifeCycleNotSupported
-	}
-	return cnv.lcHandler.MarkFinished()
-}
-
-// MarkError marks conveyor status as "internal error"
-func (cnv *Conveyor) MarkError() error {
-	if cnv.lcHandler == nil {
-		return ErrLifeCycleNotSupported
-	}
-	return cnv.lcHandler.MarkError()
+	return statusMarkerFunc()
 }

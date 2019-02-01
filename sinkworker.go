@@ -147,24 +147,7 @@ func (swp *SinkWorkerPool) WorkerType() string {
 // WaitAndStop SinkWorkerPool
 func (swp *SinkWorkerPool) WaitAndStop(ctx CnvContext) error {
 
-	select {
-	case <-ctx.Done():
-		return nil
-	default:
-	}
+	_ = swp.ConcreteNodeWorker.WaitAndStop(ctx)
 
-	if swp.Mode == WorkerModeTransaction {
-		if err := swp.sem.Acquire(ctx, int64(swp.WorkerCount)); err != nil {
-			ctx.SendLog(0, fmt.Sprintf("Worker:[%s] for Executor:[%s] Failed to acquire semaphore", swp.Name, swp.Executor.GetUniqueIdentifier()), err)
-		}
-	} else {
-		swp.Wg.Wait()
-	}
-
-	ctx.SendLog(3, fmt.Sprintf("Sink Worker:[%s] done, calling cleanup", swp.Name), nil)
-
-	if cleanupErr := swp.Executor.CleanUp(); cleanupErr != nil {
-		ctx.SendLog(0, fmt.Sprintf("Sink Worker:[%s] cleanup call failed. cleanupErr:[%v]", swp.Name, cleanupErr), nil)
-	}
 	return nil
 }

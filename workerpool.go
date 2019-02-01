@@ -1,6 +1,7 @@
 package conveyor
 
 import (
+	"fmt"
 	"sync"
 
 	"golang.org/x/sync/semaphore"
@@ -32,7 +33,7 @@ const (
 	// and has to handle the copying of data from/to channels (except, closing them), executor will also need to ensure
 	// that it monitors ctx.Done() to shutdown worker, in case of any error.
 	// Needs more code, use only if you are ready to peek into how it works.
-	// Some use cases are, where you can't fetch data on-demand with a function call. Eg. Running an NPI server as source
+	// Some use cases are, where you can't fetch data on-demand with a function call. Eg. Running an API server as source
 	WorkerModeLoop
 )
 
@@ -94,6 +95,30 @@ func (wp *ConcreteNodeWorker) Start() {
 
 // CreateChannels creates channels for the worker
 func (wp *ConcreteNodeWorker) CreateChannels(buffer int) {}
+
+// WaitAndStop ConcreteNodeWorker
+func (wp *ConcreteNodeWorker) WaitAndStop(ctx CnvContext) error {
+
+	select {
+	case <-ctx.Done():
+		return nil
+	default:
+	}
+
+	if wp.Mode == WorkerModeTransaction {
+		if err := wp.sem.Acquire(ctx, int64(wp.WorkerCount)); err != nil {
+			ctx.SendLog(0, fmt.Sprintf("Worker:[%s] for Executor:[%s] Failed to acquire semaphore", wp.Name, wp.Executor.GetUniqueIdentifier()), err)
+		}
+	} else {
+		wp.Wg.Wait()
+	}
+	ctx.SendLog(3, fmt.Sprintf("Worker:[%s] done, calling cleanup", wp.Name), nil)
+
+	if cleanupErr := wp.Executor.CleanUp(); cleanupErr != nil {
+		ctx.SendLog(0, fmt.Sprintf("Worker:[%s] cleanup call failed. cleanupErr:[%v]", wp.Name, cleanupErr), nil)
+	}
+	return nil
+}
 
 // Start the worker
 func (wp *ConcreteJointWorker) Start() {

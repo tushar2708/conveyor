@@ -2,9 +2,8 @@ package conveyor
 
 import (
 	"fmt"
-	"log"
-
 	"golang.org/x/sync/semaphore"
+	"log"
 )
 
 // SinkWorkerPool struct provides the worker pool infra for Sink interface
@@ -40,28 +39,14 @@ func (swp *SinkWorkerPool) Start(ctx CnvContext) error {
 
 // startLoopMode SinkWorkerPool
 func (swp *SinkWorkerPool) startLoopMode(ctx CnvContext) error {
-	for i := 0; i < swp.WorkerCount; i++ {
-		swp.Wg.Add(1)
 
-		go func() {
-			defer swp.Wg.Done()
+	return swp.ConcreteNodeWorker.startLoopMode(ctx, swp.inputChannel, nil)
 
-			if err := swp.Executor.ExecuteLoop(ctx, swp.inputChannel, nil); err != nil {
-				if err == ErrExecuteLoopNotImplemented {
-					ctx.SendLog(0, fmt.Sprintf("Executor:[%s]", swp.Executor.GetUniqueIdentifier()), err)
-					log.Fatalf("Improper setup of Executor[%s], ExecuteLoop() method is required", swp.Executor.GetUniqueIdentifier())
-				} else {
-					return
-				}
-			}
-
-		}()
-	}
-	return nil
 }
 
 // startTransactionMode starts SourceWorkerPool in transaction mode
 func (swp *SinkWorkerPool) startTransactionMode(ctx CnvContext) error {
+
 	swp.sem = semaphore.NewWeighted(int64(swp.WorkerCount))
 
 workerLoop:
@@ -83,23 +68,23 @@ workerLoop:
 			ctx.SendLog(0, fmt.Sprintf("Worker:[%s] for Executor:[%s] Failed to acquire semaphore", swp.Name, swp.Executor.GetUniqueIdentifier()), err)
 			break
 		}
-		// fmt.Println("sink sem acquire 1")
 
 		go func(data map[string]interface{}) {
 			// defer fmt.Println("sink sem release 1")
 			defer swp.sem.Release(1)
 			if ok {
 				_, err := swp.Executor.Execute(ctx, data)
+				if err == ErrExecuteNotImplemented {
+					ctx.SendLog(0, fmt.Sprintf("Executor:[%s]", swp.Executor.GetUniqueIdentifier()), err)
+					log.Fatalf("Improper setup of Executor[%s], Execute() method is required", swp.Executor.GetUniqueIdentifier())
+				}
 				if err != nil {
-					if err == ErrExecuteNotImplemented {
-						ctx.SendLog(0, fmt.Sprintf("Executor:[%s]", swp.Executor.GetUniqueIdentifier()), err)
-						log.Fatalf("Improper setup of Executor[%s], Execute() method is required", swp.Executor.GetUniqueIdentifier())
-					}
+					ctx.SendLog(2, fmt.Sprintf("Worker:[%s] for Executor:[%s] Execute() Call Failed.",
+						swp.Name, swp.Executor.GetUniqueIdentifier()), err)
 				}
 			}
 			return
 		}(in)
-
 	}
 
 	return nil

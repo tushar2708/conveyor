@@ -70,22 +70,8 @@ func (fwp *OperationWorkerPool) Start(ctx CnvContext) error {
 // startLoopMode OperationWorkerPool
 func (fwp *OperationWorkerPool) startLoopMode(ctx CnvContext) error {
 
-	for i := 0; i < fwp.WorkerCount; i++ {
-		fwp.Wg.Add(1)
-		go func() {
-			defer fwp.Wg.Done()
+	return fwp.ConcreteNodeWorker.startLoopMode(ctx, fwp.inputChannel, fwp.outputChannel)
 
-			if err := fwp.Executor.ExecuteLoop(ctx, fwp.inputChannel, fwp.outputChannel); err != nil {
-				if err == ErrExecuteLoopNotImplemented {
-					ctx.SendLog(0, fmt.Sprintf("Executor:[%s] ", fwp.Executor.GetUniqueIdentifier()), err)
-					log.Fatalf("Improper setup of Executor[%s], ExecuteLoop() method is required", fwp.Executor.GetName())
-				} else {
-					return
-				}
-			}
-		}()
-	}
-	return nil
 }
 
 // startTransactionMode starts OperationWorkerPool in transaction mode
@@ -102,7 +88,7 @@ workerLoop:
 		default:
 		}
 
-		in, ok := <-fwp.inputChannel
+		inData, ok := <-fwp.inputChannel
 		if !ok {
 			ctx.SendLog(0, fmt.Sprintf("Executor:[%s] Operation's input channel closed", fwp.Executor.GetUniqueIdentifier()), nil)
 			break workerLoop
@@ -129,9 +115,12 @@ workerLoop:
 			} else if err == ErrExecuteNotImplemented {
 				ctx.SendLog(0, fmt.Sprintf("Executor:[%s]", fwp.Executor.GetUniqueIdentifier()), err)
 				log.Fatalf("Improper setup of Executor[%s], Execute() method is required", fwp.Executor.GetUniqueIdentifier())
+			} else {
+				ctx.SendLog(2, fmt.Sprintf("Worker:[%s] for Executor:[%s] Execute() Call Failed.",
+					fwp.Name, fwp.Executor.GetUniqueIdentifier()), err)
 			}
 			return
-		}(in)
+		}(inData)
 
 	}
 

@@ -59,23 +59,8 @@ func (swp *SourceWorkerPool) Start(ctx CnvContext) error {
 // startLoopMode SourceWorkerPool
 func (swp *SourceWorkerPool) startLoopMode(ctx CnvContext) error {
 
-	for i := 0; i < swp.WorkerCount; i++ {
-		swp.Wg.Add(1)
-		// fmt.Println("src wg add 1")
-		go func() {
-			// defer fmt.Println("src wg done 1")
-			defer swp.Wg.Done()
-			if err := swp.Executor.ExecuteLoop(ctx, nil, swp.outputChannel); err != nil {
-				if err == ErrExecuteLoopNotImplemented {
-					ctx.SendLog(0, fmt.Sprintf("Executor:[%s] ", swp.Executor.GetUniqueIdentifier()), err)
+	return swp.ConcreteNodeWorker.startLoopMode(ctx, nil, swp.outputChannel)
 
-					log.Fatalf("Improper setup of Executor[%s], ExecuteLoop() method is required", swp.Executor.GetName())
-				}
-				return
-			}
-		}()
-	}
-	return nil
 }
 
 // startTransactionMode starts SourceWorkerPool in transaction mode
@@ -109,14 +94,14 @@ workerLoop:
 
 		go func() {
 			defer swp.sem.Release(1)
-			out, err := swp.Executor.Execute(ctx, nil)
+			outData, err := swp.Executor.Execute(ctx, nil)
 			if err == nil {
 				select {
 				case <-ctx.Done():
 					return
 				default:
 				}
-				swp.outputChannel <- out
+				swp.outputChannel <- outData
 			} else if err == ErrExecuteNotImplemented {
 				ctx.SendLog(0, fmt.Sprintf("Executor:[%s]", swp.Executor.GetUniqueIdentifier()), err)
 				log.Fatalf("Improper setup of Executor[%s], Execute() method is required", swp.Executor.GetUniqueIdentifier())
@@ -127,6 +112,9 @@ workerLoop:
 				doneMutex.Unlock()
 				ctx.Cancel()
 				return
+			} else {
+				ctx.SendLog(2, fmt.Sprintf("Worker:[%s] for Executor:[%s] Execute() Call Failed.",
+					swp.Name, swp.Executor.GetUniqueIdentifier()), err)
 			}
 			return
 		}()
@@ -149,5 +137,3 @@ func (swp *SourceWorkerPool) WaitAndStop(ctx CnvContext) error {
 	close(swp.outputChannel)
 	return nil
 }
-
-

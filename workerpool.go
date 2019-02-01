@@ -2,6 +2,7 @@ package conveyor
 
 import (
 	"fmt"
+	"log"
 	"sync"
 
 	"golang.org/x/sync/semaphore"
@@ -40,8 +41,8 @@ const (
 // WPool to run different nodes of comex graph
 type WPool struct {
 	Name string
-	Wg         sync.WaitGroup
-	sem        *semaphore.Weighted
+	Wg   sync.WaitGroup
+	sem  *semaphore.Weighted
 }
 
 // ConcreteNodeWorker to run different nodes of comex graph
@@ -107,6 +108,31 @@ func (cnw *ConcreteNodeWorker) Start() {
 		cnw.Wg.Add(1)
 		go cnw.run()
 	}
+}
+
+// startLoopMode starts ConcreteNodeWorker in loop mode
+func (cnw *ConcreteNodeWorker) startLoopMode(ctx CnvContext, inputChannel chan map[string]interface{},
+	outChannel chan map[string]interface{}) error {
+
+	for i := 0; i < cnw.WorkerCount; i++ {
+		cnw.Wg.Add(1)
+		// fmt.Println("src wg add 1")
+		go func() {
+			// defer fmt.Println("src wg done 1")
+			defer cnw.Wg.Done()
+			if err := cnw.Executor.ExecuteLoop(ctx, inputChannel, outChannel); err != nil {
+				if err == ErrExecuteLoopNotImplemented {
+					ctx.SendLog(0, fmt.Sprintf("Executor:[%s] ", cnw.Executor.GetUniqueIdentifier()), err)
+
+					log.Fatalf("Improper setup of Executor[%s], ExecuteLoop() method is required",
+						cnw.Executor.GetName())
+				}
+				return
+			}
+		}()
+	}
+
+	return nil
 }
 
 // CreateChannels creates channels for the worker

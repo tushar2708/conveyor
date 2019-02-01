@@ -7,7 +7,6 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-
 // OperationWorkerPool struct provides the worker pool infra for Operation interface
 type OperationWorkerPool struct {
 	*ConcreteNodeWorker
@@ -24,21 +23,8 @@ type OperationNode struct {
 // NewOperationWorkerPool creates a new OperationWorkerPool
 func NewOperationWorkerPool(executor NodeExecutor, mode WorkerMode) NodeWorker {
 
-	wCnt := executor.Count()
-	if wCnt < 1 {
-		wCnt = 1
-	}
-
-	fwp := &OperationWorkerPool{
-		ConcreteNodeWorker: &ConcreteNodeWorker{
-			WPool: &WPool{
-				Name: executor.GetName() + "_worker",
-			},
-			WorkerCount: wCnt,
-			Mode:        mode,
-			Executor:    executor,
-		},
-	}
+	cnw := newConcreteNodeWorker(executor, mode)
+	fwp := &OperationWorkerPool{ConcreteNodeWorker: cnw}
 
 	return fwp
 }

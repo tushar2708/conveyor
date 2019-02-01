@@ -40,8 +40,6 @@ const (
 // WPool to run different nodes of comex graph
 type WPool struct {
 	Name string
-	// Executor    common.NodeExecutor
-	sigChannel chan interface{}
 	Wg         sync.WaitGroup
 	sem        *semaphore.Weighted
 }
@@ -85,19 +83,37 @@ type JointWorker interface {
 	AddOutputChannel(chan map[string]interface{}) error
 }
 
+func newConcreteNodeWorker(executor NodeExecutor, mode WorkerMode) *ConcreteNodeWorker {
+
+	wCnt := executor.Count()
+	if wCnt < 1 {
+		wCnt = 1
+	}
+	cnw := &ConcreteNodeWorker{
+		WPool: &WPool{
+			Name: executor.GetName() + "_worker",
+		},
+		WorkerCount: wCnt,
+		Mode:        mode,
+		Executor:    executor,
+	}
+
+	return cnw
+}
+
 // Start the worker
-func (wp *ConcreteNodeWorker) Start() {
-	for i := 0; i < wp.Executor.Count(); i++ {
-		wp.Wg.Add(1)
-		go wp.run()
+func (cnw *ConcreteNodeWorker) Start() {
+	for i := 0; i < cnw.Executor.Count(); i++ {
+		cnw.Wg.Add(1)
+		go cnw.run()
 	}
 }
 
 // CreateChannels creates channels for the worker
-func (wp *ConcreteNodeWorker) CreateChannels(buffer int) {}
+func (cnw *ConcreteNodeWorker) CreateChannels(buffer int) {}
 
 // WaitAndStop ConcreteNodeWorker
-func (wp *ConcreteNodeWorker) WaitAndStop(ctx CnvContext) error {
+func (cnw *ConcreteNodeWorker) WaitAndStop(ctx CnvContext) error {
 
 	select {
 	case <-ctx.Done():
@@ -105,17 +121,19 @@ func (wp *ConcreteNodeWorker) WaitAndStop(ctx CnvContext) error {
 	default:
 	}
 
-	if wp.Mode == WorkerModeTransaction {
-		if err := wp.sem.Acquire(ctx, int64(wp.WorkerCount)); err != nil {
-			ctx.SendLog(0, fmt.Sprintf("Worker:[%s] for Executor:[%s] Failed to acquire semaphore", wp.Name, wp.Executor.GetUniqueIdentifier()), err)
+	if cnw.Mode == WorkerModeTransaction {
+		if err := cnw.sem.Acquire(ctx, int64(cnw.WorkerCount)); err != nil {
+			ctx.SendLog(0, fmt.Sprintf("Worker:[%s] for Executor:[%s] Failed to acquire semaphore",
+				cnw.Name, cnw.Executor.GetUniqueIdentifier()), err)
 		}
 	} else {
-		wp.Wg.Wait()
+		cnw.Wg.Wait()
 	}
-	ctx.SendLog(3, fmt.Sprintf("Worker:[%s] done, calling cleanup", wp.Name), nil)
+	ctx.SendLog(3, fmt.Sprintf("Worker:[%s] done, calling cleanup", cnw.Name), nil)
 
-	if cleanupErr := wp.Executor.CleanUp(); cleanupErr != nil {
-		ctx.SendLog(0, fmt.Sprintf("Worker:[%s] cleanup call failed. cleanupErr:[%v]", wp.Name, cleanupErr), nil)
+	if cleanupErr := cnw.Executor.CleanUp(); cleanupErr != nil {
+		ctx.SendLog(0, fmt.Sprintf("Worker:[%s] cleanup call failed. cleanupErr:[%v]",
+			cnw.Name, cleanupErr), nil)
 	}
 	return nil
 }

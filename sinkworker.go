@@ -16,21 +16,8 @@ type SinkWorkerPool struct {
 // NewSinkWorkerPool creates a new SinkWorkerPool
 func NewSinkWorkerPool(executor NodeExecutor, mode WorkerMode) NodeWorker {
 
-	wCnt := executor.Count()
-	if wCnt < 1 {
-		wCnt = 1
-	}
-
-	swp := &SinkWorkerPool{
-		ConcreteNodeWorker: &ConcreteNodeWorker{
-			WPool: &WPool{
-				Name: executor.GetName() + "_worker",
-			},
-			WorkerCount: wCnt,
-			Mode:        mode,
-			Executor:    executor,
-		},
-	}
+	cnw := newConcreteNodeWorker(executor, mode)
+	swp := &SinkWorkerPool{ConcreteNodeWorker: cnw}
 
 	return swp
 }

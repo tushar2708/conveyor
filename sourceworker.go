@@ -18,23 +18,9 @@ type SourceWorkerPool struct {
 // NewSourceWorkerPool creates a new SourceWorkerPool
 func NewSourceWorkerPool(executor NodeExecutor, mode WorkerMode) NodeWorker {
 
-	wCnt := executor.Count()
-	if wCnt < 1 {
-		wCnt = 1
-	}
+	cnw := newConcreteNodeWorker(executor, mode)
+	swp := &SourceWorkerPool{ConcreteNodeWorker: cnw}
 
-	swp := &SourceWorkerPool{
-		ConcreteNodeWorker: &ConcreteNodeWorker{
-			WPool: &WPool{
-				Name: executor.GetName() + "_worker",
-			},
-			WorkerCount: wCnt,
-			Mode:        mode,
-			Executor:    executor,
-		},
-	}
-
-	swp.sigChannel = make(chan interface{}, 1)
 	return swp
 }
 

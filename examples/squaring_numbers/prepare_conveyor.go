@@ -5,7 +5,7 @@ import (
 	"github.com/tushar2708/conveyor"
 )
 
-func getInitialConveyor() (*conveyor.Conveyor, error) {
+func GetBasicConveyor() (*conveyor.Conveyor, error) {
 	cnv, err := conveyor.NewConveyor("square_printer", 10)
 	if err != nil {
 		return nil, err
@@ -13,12 +13,7 @@ func getInitialConveyor() (*conveyor.Conveyor, error) {
 	return cnv, nil
 }
 
-func PrepareLoopingConveyor() (*conveyor.Conveyor, error) {
-
-	cnv, cErr := getInitialConveyor()
-	if cErr != nil {
-		return nil, cErr
-	}
+func PrepareLoopingConveyor(cnv *conveyor.Conveyor) (*conveyor.Conveyor, error) {
 
 	// Create a source executor, and add it to conveyor.
 	// A pipeline may have only one source node
@@ -58,12 +53,7 @@ func PrepareLoopingConveyor() (*conveyor.Conveyor, error) {
 	return cnv, nil
 }
 
-func PrepareTransactionalConveyor() (*conveyor.Conveyor, error) {
-
-	cnv, cErr := getInitialConveyor()
-	if cErr != nil {
-		return nil, cErr
-	}
+func PrepareTransactionalConveyor(cnv *conveyor.Conveyor) (*conveyor.Conveyor, error) {
 
 	gen := &NumberSource{
 		ConcreteNodeExecutor: &conveyor.ConcreteNodeExecutor{Name: "number_generator",},
@@ -93,12 +83,7 @@ func PrepareTransactionalConveyor() (*conveyor.Conveyor, error) {
 	return cnv, nil
 }
 
-func PrepareComplexTransactionalConveyor() (*conveyor.Conveyor, error) {
-
-	cnv, cErr := getInitialConveyor()
-	if cErr != nil {
-		return nil, cErr
-	}
+func PrepareComplexTransactionalConveyor(cnv *conveyor.Conveyor) (*conveyor.Conveyor, error) {
 
 	gen := &NumberSource{
 		ConcreteNodeExecutor: &conveyor.ConcreteNodeExecutor{

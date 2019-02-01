@@ -27,12 +27,19 @@ func main() {
 	var testConveyor *conveyor.Conveyor
 	var cnvErr error
 
+	basicConveyor, bErr := squaring_numbers.GetBasicConveyor()
+	if bErr != nil {
+		fmt.Printf("basic conveyor creation failed for example: %d. cnvErr:[%v]\n", exampleToRun, cnvErr)
+		os.Exit(1)
+
+	}
+
 	if exampleToRun == 1 {
-		testConveyor, cnvErr = squaring_numbers.PrepareLoopingConveyor()
+		testConveyor, cnvErr = squaring_numbers.PrepareLoopingConveyor(basicConveyor)
 	} else if exampleToRun == 2 {
-		testConveyor, cnvErr = squaring_numbers.PrepareTransactionalConveyor()
+		testConveyor, cnvErr = squaring_numbers.PrepareTransactionalConveyor(basicConveyor)
 	} else if exampleToRun == 3 {
-		testConveyor, cnvErr = squaring_numbers.PrepareComplexTransactionalConveyor()
+		testConveyor, cnvErr = squaring_numbers.PrepareComplexTransactionalConveyor(basicConveyor)
 	} else {
 		fmt.Println(`Example number is invalid.
 		Usage: go run main.go <example number (1, 2, or 3)>

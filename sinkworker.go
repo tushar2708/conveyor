@@ -2,8 +2,9 @@ package conveyor
 
 import (
 	"fmt"
-	"golang.org/x/sync/semaphore"
 	"log"
+
+	"golang.org/x/sync/semaphore"
 )
 
 // SinkWorkerPool struct provides the worker pool infra for Sink interface

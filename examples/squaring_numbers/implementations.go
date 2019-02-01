@@ -1,7 +1,8 @@
-package squaring_numbers
+package squaringNumbers
 
 import (
 	"fmt"
+
 	"github.com/tushar2708/conveyor"
 )
 
@@ -80,7 +81,7 @@ func (src *NumberSource) Execute(ctx conveyor.CnvContext, inData map[string]inte
 		return nil, conveyor.ErrSourceExhausted
 	}
 	outData := map[string]interface{}{"num": src.CountLimit}
-	src.CountLimit -= 1
+	src.CountLimit--
 
 	return outData, nil
 }
@@ -116,16 +117,21 @@ func (snk *PrinterSink) Execute(ctx conveyor.CnvContext, inData map[string]inter
 	return inData, nil
 }
 
+// Execute for PrinterSink1
 func (snk *PrinterSink1) Execute(ctx conveyor.CnvContext, inData map[string]interface{}) (map[string]interface{}, error) {
 
 	fmt.Printf("PrinterSink1 says ---> Output data:[+%v]\n", inData)
 	return inData, nil
 }
+
+// Execute for PrinterSink2
 func (snk *PrinterSink2) Execute(ctx conveyor.CnvContext, inData map[string]interface{}) (map[string]interface{}, error) {
 
 	fmt.Printf("PrinterSink2 says ------> Output data:[+%v]\n", inData)
 	return inData, nil
 }
+
+// Execute for PrinterSink3
 func (snk *PrinterSink3) Execute(ctx conveyor.CnvContext, inData map[string]interface{}) (map[string]interface{}, error) {
 
 	fmt.Printf("PrinterSink3 says ---------> Output data:[+%v]\n", inData)

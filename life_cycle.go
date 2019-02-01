@@ -21,9 +21,7 @@ const (
 	StateInternalError = "internalError"
 )
 
-
-
-	// LifeCycleHandler handles conveyor start/stop
+// LifeCycleHandler handles conveyor start/stop
 type LifeCycleHandler interface {
 	GetState() (string, error)
 	GetStatusMsg() (string, error)
@@ -39,7 +37,7 @@ type LifeCycleHandler interface {
 	MarkError() error
 }
 
-func getStateMarker(state string,lch LifeCycleHandler) func()error{
+func getStateMarker(state string, lch LifeCycleHandler) func() error {
 
 	switch state {
 	case StatusPreparing:

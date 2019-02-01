@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/tushar2708/conveyor"
-	"github.com/tushar2708/conveyor/examples/squaring_numbers"
 	"os"
 	"strconv"
+
+	"github.com/tushar2708/conveyor"
+	"github.com/tushar2708/conveyor/examples/squaring_numbers"
 )
 
 func main() {
@@ -27,7 +28,7 @@ func main() {
 	var testConveyor *conveyor.Conveyor
 	var cnvErr error
 
-	basicConveyor, bErr := squaring_numbers.GetBasicConveyor()
+	basicConveyor, bErr := squaringNumbers.GetBasicConveyor("square_printer")
 	if bErr != nil {
 		fmt.Printf("basic conveyor creation failed for example: %d. cnvErr:[%v]\n", exampleToRun, cnvErr)
 		os.Exit(1)
@@ -35,11 +36,11 @@ func main() {
 	}
 
 	if exampleToRun == 1 {
-		testConveyor, cnvErr = squaring_numbers.PrepareLoopingConveyor(basicConveyor)
+		testConveyor, cnvErr = squaringNumbers.PrepareLoopingConveyor(basicConveyor)
 	} else if exampleToRun == 2 {
-		testConveyor, cnvErr = squaring_numbers.PrepareTransactionalConveyor(basicConveyor)
+		testConveyor, cnvErr = squaringNumbers.PrepareTransactionalConveyor(basicConveyor)
 	} else if exampleToRun == 3 {
-		testConveyor, cnvErr = squaring_numbers.PrepareComplexTransactionalConveyor(basicConveyor)
+		testConveyor, cnvErr = squaringNumbers.PrepareComplexTransactionalConveyor(basicConveyor)
 	} else {
 		fmt.Println(`Example number is invalid.
 		Usage: go run main.go <example number (1, 2, or 3)>

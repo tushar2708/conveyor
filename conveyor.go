@@ -225,7 +225,7 @@ func (cnv *Conveyor) AddJointExecutor(jointExecutor JointExecutor) error {
 	return nil
 }
 
-// AddNodeExecutorToJoint creates a worker for a given executor (based on workerMode & workerType)
+// AddJointExecutorAfterNode creates a worker for a given executor (based on workerMode & workerType)
 // And then links it to the last "Joint" added to the conveyor, by creating and mapping connecting channels
 // In case there was no "Joint" added previously, it returns an error
 func (cnv *Conveyor) AddJointExecutorAfterNode(jointExecutor JointExecutor, workerMode WorkerMode, workerType string) error {
@@ -256,7 +256,7 @@ func (cnv *Conveyor) AddJointExecutorAfterNode(jointExecutor JointExecutor, work
 	return nil
 }
 
-// AddNodeExecutorToJoint creates a worker for a given executor (based on workerMode & workerType)
+// AddNodeExecutorAfterJoint creates a worker for a given executor (based on workerMode & workerType)
 // And then links it to the last "Joint" added to the conveyor, by creating and mapping connecting channels
 // In case there was no "Joint" added previously, it returns an error
 func (cnv *Conveyor) AddNodeExecutorAfterJoint(nodeExecutor NodeExecutor, workerMode WorkerMode, workerType string) error {
@@ -425,6 +425,7 @@ trackProgress:
 	}
 }
 
+// MarkCurrentState marks the current stage of conveyor using internal life-cycle handler interface
 func (cnv *Conveyor) MarkCurrentState(state string) error {
 	if cnv.lcHandler == nil {
 		return ErrLifeCycleNotSupported

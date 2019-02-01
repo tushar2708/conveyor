@@ -1,4 +1,4 @@
-package squaring_numbers
+package squaringNumbers
 
 import "github.com/tushar2708/conveyor"
 

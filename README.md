@@ -10,7 +10,6 @@
 
 [![Test Coverage](https://api.codeclimate.com/v1/badges/e6c8164f8cbf98490fe8/test_coverage)](https://codeclimate.com/github/tushar2708/conveyor/test_coverage)
 
-[![Known Vulnerabilities](https://snyk.io/test/github/tushar2708/conveyor/badge.svg)](https://snyk.io/test/github/tushar2708/conveyor)
 
 A go pipeline management library, supporting concurrent pipelines, with multiple nodes and joints.
 

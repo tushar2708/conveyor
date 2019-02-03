@@ -192,6 +192,8 @@ use `EnableProgress()`to set expected runtime & to enable progress.
     And if it's still not done after 2 hours, it will just wait at 99%, unless complete.
 
 
+## Needs more work: Working with a distributed conveyor-based application
+
 To go further, you need to know about Conveyor Life Cycle Handling. 
 Conveyor was made to work with API based applications, that might be running on multiple servers, 
 and we might need to retain the data even after a restart.

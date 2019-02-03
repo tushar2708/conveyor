@@ -4,13 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/satori/go.uuid"
 	"log"
 	"sync"
 	"time"
 )
 
+var (
+	// ErrEmptyConveyor error
+	ErrEmptyConveyor = errors.New("conveyor is empty, no workers employed")
+)
+
 // Conveyor is base
 type Conveyor struct {
+	id           string
 	Name         string
 	ctx          CnvContext
 	needProgress bool
@@ -20,26 +27,131 @@ type Conveyor struct {
 	progress         chan float64
 	duration         time.Duration
 	expectedDuration time.Duration
-	LifeCycle        LifeCycleHandler
+	lifeCycle        LifeCycleHandler
 
 	workers []NodeWorker
 	joints  []JointWorker
 
-	cleanupOnce sync.Once
+	startOnce           sync.Once // To ensure that conveyor can't start again
+	openForConfigChange bool
 
-	// SourceNode NodeWorker
-	// InnerNodes []NodeWorker
-	// SinkNodes  []NodeWorker
+	cleanupOnce sync.Once // To ensure that conveyor can't be cleaned up again
 }
 
-// Status returns a channel on which Conveyor Statuses will be published
-func (cnv *Conveyor) Status() <-chan string {
-	iCtxData := cnv.ctx.GetData()
-	if iCtxData != nil {
-		ctxData, _ := iCtxData.(CtxData)
-		return ctxData.status
+// NewConveyor creates a new Conveyor instance, with all options set to default values/implementations
+func NewConveyor(name string, bufferLen int) (*Conveyor, error) {
+
+	if bufferLen <= 0 {
+		bufferLen = 100
 	}
-	return nil
+
+	cnv := &Conveyor{
+		Name:      name,
+		bufferLen: bufferLen,
+	}
+
+	// Set ID to a default UUID string
+	id := uuid.NewV4()
+	cnv.id = id.String()
+
+	// Set expected duration to default value
+	cnv.expectedDuration = time.Hour
+
+	// Set lifeCycle to nil (default value)
+	cnv.lifeCycle = nil
+
+	// Set needProgress to false by default
+	cnv.needProgress = false
+
+	_ctx := &cnvContext{
+		Context: context.Background(),
+		Data: CtxData{
+			Name:   name,
+			logs:   make(chan Message, 100),
+			status: make(chan string, 100),
+		},
+	}
+
+	cnv.ctx = _ctx.WithCancel()
+
+	// Keep the conveyor open for config change for now
+	// Once this value is turned to false by "lockConfig()", config change will have no effect.
+	cnv.openForConfigChange = true
+
+	return cnv, nil
+}
+
+func (cnv *Conveyor) lockConfig() {
+	cnv.startOnce.Do(func() {
+		cnv.openForConfigChange = false
+	})
+}
+
+// SetID sets the id of Conveyor to a given string
+// Will have no effect, once you add your first node
+func (cnv *Conveyor) SetID(id string) *Conveyor {
+	if cnv.openForConfigChange == false {
+		return cnv
+	}
+	cnv.id = id
+	return cnv
+}
+
+// SetTimeout sets the timeout of Conveyor to a given value
+// Will have no effect, once you add your first node
+// If you change the context using "SetCustomContext()" after calling this method,
+// timeout will get reset
+func (cnv *Conveyor) SetTimeout(timeout time.Duration) *Conveyor {
+	if cnv.openForConfigChange == false {
+		return cnv
+	}
+	if timeout <= 0 {
+		cnv.ctx = cnv.ctx.WithCancel()
+	} else {
+		cnv.ctx = cnv.ctx.WithTimeout(timeout)
+	}
+	return cnv
+}
+
+// EnableProgress sets the expectedDuration of Conveyor to a given value.
+// Also enables progress based on this value of expectedDuration
+// Will have no effect, once you add your first node
+func (cnv *Conveyor) EnableProgress(expectedDuration time.Duration) *Conveyor {
+	if cnv.openForConfigChange == false {
+		return cnv
+	}
+
+	cnv.needProgress = true
+	cnv.progress = make(chan float64, 1)
+	cnv.tickProgress = time.Millisecond * 500
+
+	if expectedDuration == 0 {
+		expectedDuration = time.Hour
+	}
+	cnv.expectedDuration = expectedDuration
+
+	return cnv
+}
+
+// SetLifeCycleHandler sets the conveyor's LifeCycleHandler interface to a given implementation
+// Will have no effect, once you add your first node
+func (cnv *Conveyor) SetLifeCycleHandler(lch LifeCycleHandler) *Conveyor {
+	if cnv.openForConfigChange == false {
+		return cnv
+	}
+	cnv.lifeCycle = lch
+	return cnv
+}
+
+// SetCustomContext sets the conveyor's CnvContext interface to a given implementation
+// Will have no effect, once you add your first node
+// This method must be called before you call "SetTimeout()"
+func (cnv *Conveyor) SetCustomContext(ctx CnvContext) *Conveyor {
+	if cnv.openForConfigChange == false {
+		return cnv
+	}
+	cnv.ctx = ctx
+	return cnv
 }
 
 // GetConveyorContext gives the conveyor's context object
@@ -52,14 +164,6 @@ func (cnv *Conveyor) Done() <-chan struct{} {
 	return cnv.ctx.Done()
 }
 
-// Progress returns a channel which is regularly updated with progress %
-func (cnv *Conveyor) Progress() <-chan float64 {
-	if cnv.needProgress {
-		return cnv.progress
-	}
-	return nil
-}
-
 // Logs returns a channel on which Conveyor Statuses will be published
 func (cnv *Conveyor) Logs() <-chan Message {
 	iCtxData := cnv.ctx.GetData()
@@ -70,117 +174,22 @@ func (cnv *Conveyor) Logs() <-chan Message {
 	return nil
 }
 
-var (
-	// ErrEmptyConveyor error
-	ErrEmptyConveyor = errors.New("conveyor is empty, no workers employed")
-)
-
-// NewConveyor creates a new Conveyor instance
-func NewConveyor(name string, bufferLen int) (*Conveyor, error) {
-
-	conveyor, err := newConveyorWithInbuiltCtx(name, bufferLen, nil, -1)
-	conveyor.needProgress = false
-
-	return conveyor, err
+// Status returns a channel on which Conveyor Statuses will be published
+func (cnv *Conveyor) Status() <-chan string {
+	iCtxData := cnv.ctx.GetData()
+	if iCtxData != nil {
+		ctxData, _ := iCtxData.(CtxData)
+		return ctxData.status
+	}
+	return nil
 }
 
-// NewTimeoutConveyor creates a new Conveyor instance with specified timeout
-func NewTimeoutConveyor(name string, bufferLen int, timeout time.Duration) (*Conveyor, error) {
-
-	conveyor, err := newConveyorWithInbuiltCtx(name, bufferLen, nil, timeout)
-	conveyor.needProgress = false
-
-	return conveyor, err
-}
-
-// NewTimeoutAndProgressConveyor creates a new Conveyor instance, with timeout and progress enabled
-func NewTimeoutAndProgressConveyor(name string, bufferLen int, lch LifeCycleHandler, timeout, expectedDuration time.Duration) (*Conveyor, error) {
-
-	if expectedDuration == 0 {
-		expectedDuration = time.Hour
+// Progress returns a channel which is regularly updated with progress %
+func (cnv *Conveyor) Progress() <-chan float64 {
+	if cnv.needProgress {
+		return cnv.progress
 	}
-
-	conveyor, err := newConveyorWithInbuiltCtx(name, bufferLen, lch, timeout)
-
-	conveyor.needProgress = true
-	conveyor.progress = make(chan float64, 1)
-
-	conveyor.expectedDuration = expectedDuration
-	conveyor.tickProgress = time.Millisecond * 500
-
-	return conveyor, err
-}
-
-// NewConveyorWithCustomCtx creates a new Conveyor instance with custom context management
-func NewConveyorWithCustomCtx(name string, bufferLen int, lch LifeCycleHandler, timeout, expectedDuration time.Duration, _ctx CnvContext) (*Conveyor, error) {
-
-	if expectedDuration == 0 {
-		expectedDuration = time.Hour
-	}
-
-	conveyor, err := newConveyor(name, bufferLen, lch, timeout, _ctx)
-
-	conveyor.needProgress = true
-	conveyor.progress = make(chan float64, 1)
-
-	conveyor.expectedDuration = expectedDuration
-	conveyor.tickProgress = time.Millisecond * 500
-
-	return conveyor, err
-}
-
-func newConveyorWithInbuiltCtx(name string, bufferLen int, lch LifeCycleHandler, timeout time.Duration) (*Conveyor, error) {
-
-	if bufferLen <= 0 {
-		bufferLen = 100
-	}
-
-	_ctx := &cnvContext{
-		Context: context.Background(),
-		Data: CtxData{
-			Name:   name,
-			logs:   make(chan Message, 100),
-			status: make(chan string, 100),
-		},
-	}
-	var ctx CnvContext
-	if timeout <= 0 {
-		ctx = _ctx.WithCancel()
-	} else {
-		ctx = _ctx.WithTimeout(timeout)
-	}
-
-	cnv := &Conveyor{
-		Name:      name,
-		bufferLen: bufferLen,
-		ctx:       ctx,
-		LifeCycle: lch,
-	}
-
-	return cnv, nil
-}
-
-func newConveyor(name string, bufferLen int, lch LifeCycleHandler, timeout time.Duration, _ctx CnvContext) (*Conveyor, error) {
-
-	if bufferLen <= 0 {
-		bufferLen = 100
-	}
-
-	var ctx CnvContext
-	if timeout <= 0 {
-		ctx = _ctx.WithCancel()
-	} else {
-		ctx = _ctx.WithTimeout(timeout)
-	}
-
-	cnv := &Conveyor{
-		Name:      name,
-		bufferLen: bufferLen,
-		ctx:       ctx,
-		LifeCycle: lch,
-	}
-
-	return cnv, nil
+	return nil
 }
 
 // GetLastWorker returns the last added worker, or error if conveyor is empty
@@ -207,6 +216,10 @@ func (cnv *Conveyor) AddNodeExecutor(nodeExecutor NodeExecutor, workerMode Worke
 			nodeExecutor.GetName(), workerType, addErr)
 		return addErr
 	}
+
+	// As a node is now added successfully, can't change configuration anymore
+	cnv.lockConfig()
+
 	return nil
 }
 
@@ -222,6 +235,10 @@ func (cnv *Conveyor) AddJointExecutor(jointExecutor JointExecutor) error {
 			jointExecutor.GetName(), err)
 		return err
 	}
+
+	// As a node is now added successfully, can't change configuration anymore
+	cnv.lockConfig()
+
 	return nil
 }
 
@@ -307,6 +324,9 @@ func (cnv *Conveyor) AddNodeWorker(worker NodeWorker, toLink bool) error {
 		}
 	}
 
+	// As a node is now added successfully, can't change configuration anymore
+	cnv.lockConfig()
+
 	return nil
 }
 
@@ -322,10 +342,18 @@ func (cnv *Conveyor) AddJointWorker(joint JointWorker) error {
 // Start the Conveyor
 func (cnv *Conveyor) Start() error {
 
+	// As a conveyor is now being started, can't change configuration anymore
+	cnv.lockConfig()
+
 	wg := sync.WaitGroup{}
 
 	if cnv.needProgress {
 		go cnv.updateProgress()
+	}
+
+	workerCount := len(cnv.workers)
+	if workerCount == 0 {
+		return ErrEmptyConveyor
 	}
 
 	for _, nodeWorker := range cnv.workers {
@@ -385,7 +413,7 @@ func (cnv *Conveyor) cleanup(abruptKill bool) {
 			close(cnv.progress)
 		})
 	}
-	if abruptKill == false {
+	if abruptKill == false && cnv.lifeCycle != nil {
 		if err := cnv.MarkCurrentState(StateFinished); err != nil {
 			log.Printf("Conveyor:[%s] unable to set status as 'finished': Error:[%v]\n", cnv.Name, err)
 		}
@@ -427,11 +455,11 @@ trackProgress:
 
 // MarkCurrentState marks the current stage of conveyor using internal life-cycle handler interface
 func (cnv *Conveyor) MarkCurrentState(state string) error {
-	if cnv.LifeCycle == nil {
+	if cnv.lifeCycle == nil {
 		return ErrLifeCycleNotSupported
 	}
 
-	statusMarkerFunc := getStateMarker(state, cnv.LifeCycle)
+	statusMarkerFunc := getStateMarker(state, cnv.lifeCycle)
 	if statusMarkerFunc == nil {
 		return fmt.Errorf("given state '%s' is not supported by conveyor. "+
 			"Look for 'Valid States for a Conveyor' in docs", state)

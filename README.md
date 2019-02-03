@@ -15,9 +15,11 @@
 A go pipeline management library, supporting concurrent pipelines, with multiple nodes and joints.
 
 ###### TL;DR
-If you are already aware of what a pipeline is, you can move on to [examples.](https://github.com/tushar2708/conveyor/tree/master/examples "Conveyor Examples") Also, you can also know more about pipelines from [here](https://blog.golang.org/pipelines "Go Pipelines")
+If you are already aware of what a pipeline is, you can move on to [examples.](https://github.com/tushar2708/conveyor/tree/master/examples "Conveyor Examples") or [Implementation](https://github.com/tushar2708/conveyor#how-to-implement-your-own-nodes) section. 
 
-A Go pipeline is an almost standard concurrency pattern, at least in terms of use case. And there are multiple ways people create them based on their requirements. This is my attempt to make one that can be used in most, if not all use-cases.
+Also, you can know more about pipelines from [here](https://blog.golang.org/pipelines "Go Pipelines")
+
+A Go pipeline is a standard concurrency pattern, at least in terms of use case. And there are multiple ways people create them based on their requirements. This is my attempt to make one that can be used in most, if not all use-cases.
 
 ## What does Conveyor do?
 *Conveyor* does what the name suggests. Just like a conveyor belt, or a production-line, 
@@ -29,28 +31,28 @@ they can work on the next item in the queue, while the next worker does the next
 at the same time.
 Now depending on the time each operation takes, you might want to have more than one worker at any/all stages.
 
-This is exactly what this library does. At it's core, it has *node* workers and *joint* workers. 
-What we just discussed are "nodes". While *joints*, as their name suggests are like the plumbing joints of a pipeline. 
+This is exactly what this library does. At it's core, it has **node** workers and **joint** workers. 
+What we just discussed are *nodes*. While *joints*, as their name suggests are like the plumbing joints of a pipeline. 
 They can distribute, or replicate incoming data across branches.
 
-There are 3 kinds of Nodes:
+There are 3 kind of Nodes:
 
-1. Source Nodes: These are the nodes that are the source of data. It may be a database, a file, a data stream, 
+1. *Source Nodes*: These are the nodes that are the source of data. It may be a database, a file, a data stream, 
 an API server, or anything that can generate new bits of data. In short, create some data, and send it forward.
-2. Operation Nodes: These are the nodes that "do something" with the data. They might process/enrich/change/replace 
+2. *Operation Nodes*: These are the nodes that "do something" with the data. They might process/enrich/change/replace 
 the data, based on your business logic. The example shows a simple example of squaring/adding operations. 
 In your application, it may be making API calls to other services, doing matrix multiplications, etc. 
 In short, take data from previous node, and send modified/new data to next node. 
-3. Sink is supposed to be the last node(s) in the conveyor. This is where you finalise your work, may be send the final 
+3. *Sink* is supposed to be the last node(s) in the conveyor. This is where you finalise your work, may be send the final 
 data to someone else, save it into a database, or write it to a file, or just print it on console.
 
-If we talk about nodes, there can be multiple implementation, based on your need.
-For now, there is a built-in joint that we have here(ReplicateJoint), which replicates same data to be sent to multiple nodes 
-at next stage.
+If we talk about Joints, there can be multiple implementation, based on your need.
+For now, there is a built-in joint that conveyor have(ReplicateJoint), 
+which replicates same data to be sent to multiple nodes at next stage.
 
 ## How to implement your own nodes?
 
-Now, lets come to "How you can make your own nodes and joints". There are currently 2 interfaces:
+Lets talk about, "How you can make your own nodes and joints". There are 2 interfaces, for Nodes & Joints, respectively:
 
 ```go
 // NodeExecutor interface is the interface that you need to implement by your own types of nodes
@@ -81,13 +83,13 @@ type JointExecutor interface {
 * `Count()` decides the concurrency you want to have for your node.
 
 * `CleanUp()` is called once node's job is completed. To do any cleanup activity 
-(like closing a file/database connection)
+(like closing a file/database connection, or to wait till your other go-routines finish)
 
   If you don't want to implement all these methods, it makes sense. 
   There's a struct `ConcreteNodeExecutor` that gives default implementations of these 4 methods.
   You can get up and running without them, but for an actual application, 
   where hopefully, you will need concurrency, don't forget to return something >1 from `Count()`.
-   it's default value is 1. Also `Cleanup()` after yourself  
+   it's default value is 1. Also, always `Cleanup()` after yourself.  
  
  But, you must implement one of the below 2 methods, based on what you want your node to do.
  Their default implementation just returns `ErrExecuteNotImplemented` error.
@@ -109,7 +111,7 @@ If there are 10 instances of this function running, and all of them return,
 Conveyor will take that as a signal to shutdown, the node, and the ones that come next to it.
 As a rule of thumb, always let your source dictate when to finish up, all other will automatically follow it's lead.
 
-### Why does Conveyor follow the approach "Implement an interface", and not "Write a function", like the one mentioned [here](https://blog.golang.org/pipelines) ?
+### Why did I go for the approach of "Implement an interface", and not "Write a function", like the one mentioned [here](https://blog.golang.org/pipelines) ?
 A function is what I started with, but I soon felt that if I am going to do anything real, and flexible I need something
 more than a single function. For example, I might want to run a SQL query, and fetch the results inside the source node,
 before starting the conveyor (while creating the executor itself, say inside a `func New MySQLSource()`), 
@@ -120,7 +122,9 @@ I couldn't do it elegantly using just a function. Also the `Count()` lets each n
  how many concurrent go-routines should run for it. Which brings us to an important warning.
  Always keep your `Execute()` & `ExecuteLoop()` methods **race-free**. 
  Don't modify any of the receiver struct's parameters, inside these function. 
- Just work with the incoming data, and stream th output to the next channel(s) 
+ Just work with the incoming data, and stream th output to the next channel(s)
+ If your read operation, isn't race-free (eg. reading from a file), 
+ consider using a single go-routine for source, and more for heavy lifting in later nodes. 
 
 ## Monitoring, Logging, Progress tracking, and Timeout/Killing.
 
@@ -130,12 +134,10 @@ and have run/gone through basic examples.
 
 If you have noticed, the first argument in both `Execute()` & `ExecuteLoop()` is an interface `ctx CnvContext`.
 There is already a default implementation, that you get when you create a new conveyor instance, using:
-* NewConveyor()
-* NewConveyorNewConveyor()
-* NewTimeoutAndProgressConveyor()
+* `NewConveyor()`
 
 You can also implement your own, and pass it while creating a conveyor using:
-* NewConveyorWithCustomCtx()
+* `NewConveyor().SetCustomContext(ctx)`
 
 This is all that you can do with this Context, with default implementation:
 
@@ -156,25 +158,51 @@ you will have to keep monitoring `ctx.Done()` frequently,
 to make sure that you don't leak out your go-routines, when you kill a conveyor.
 This small stub will do that for you:
 
-```go
+    ```go
+    select {
+     case <-ctx.Done():
+        break someLoop // or return
+     default:
+     }
+    ```
 
-select {
- case <-ctx.Done():
-    break someLoop // or return
- default:
- }
+* **Timeout**: If you want your conveyor to be killed if it's not done within a fixed time, then use:
+    ```go
+    cnv, err := NewConveyor()
+    cnv.SetTimeout(timeout)
+    ```
+  But remember, if you want to use a custom context, you should set that first,
+ and then set this timeout.
+    ```go
+     cnv, err := NewConveyor()
+     cnv.SetCustomContext(ctx).SetTimeout(timeout)
+     ```
 
-```
+* **Progress**: If you want to see what % of work is completed, 
+use `EnableProgress()`to set expected runtime & to enable progress.
 
-* **Timeout**: If you want your conveyor to be killed if it's not done within a fixed time, use `NewTimeoutConveyor()`.
-and pass your desired `timeout`.
+    ```go
+     cnv, err := NewConveyor()
+     cnv.EnableProgress(expectedDuration)
+     ```
+
+    To get the progress information, once conveyor is started, 
+    just read from channel given by `conveyorInstance.Progress()`. 
+    It decides progress based on a estimate that you provide as `expectedDuration`. 
+    So if you have predicted 2 hour, it will be at 50% after an hour
+    And if it's still not done after 2 hours, it will just wait at 99%, unless complete.
+
 
 To go further, you need to know about Conveyor Life Cycle Handling. 
-Conveyor was made to work with API based applications, that might be running on multiple servers. 
-In such scenarios, you might actually want to store state, status messages, progress in some manner, 
-so that you can read that information on any server (even if a particular conveyor isn't running on that server) 
+Conveyor was made to work with API based applications, that might be running on multiple servers, 
+and we might need to retain the data even after a restart.
+In such scenarios, you might actually want to store state, status messages, progress in some persistent manner, 
+so that you can read that information on any server 
+(even if a particular conveyor isn't running on that particular server) 
 
-To create a `NewTimeoutAndProgressConveyor()`, you will need to provide an implementation of the below interface:
+To create a conveyor based application that can work across a distributed system, 
+you will need to provide an implementation of the below interface, 
+where you can fetch/store data to/from your choice of database/cache 
 
 ```go
 // LifeCycleHandler handles conveyor start/stop
@@ -194,22 +222,18 @@ type LifeCycleHandler interface {
 }
 ```
 
-In the implementation, that I use, in one of my applications, I store these details on a redis cluster
-In future, I do plan to simplify it a bit, 
-to provide an in-built implementation for those who want to run a single server application.
+In the implementation, that I use, in one of my applications, I store these details on a redis cluster.
+In future, I do plan to simplify it a bit, and maybe, 
+provide an in-built globas hash-based implementation for those who want to run a single server application.
 
 For now, you can just use a map, to store these values in-memory, for single server applications.
 
-Then, you can call `conveyorInstance.MarkCurrentState(x)`  to change the state, 
+Then, you can call `conveyorInstance.MarkCurrentState(x)` to change the state, 
 where `x` can be one of the `conveyor.Status**` values.
 
-* **Progress**: If you want to see what % of work is completed, 
-use `NewTimeoutAndProgressConveyor()`to create your conveyor.
-just read from channel given by `conveyorInstance.Progress()`. 
-It decided progress based on a estimate that you provide as `expectedDuration`. 
-So if you have predicted 1 hour, and it's still not done, it will just wait at 99%
 
-It's currently a new project, and I am open to new ideas and suggestions. 
+It's currently a pretty new project, and I am open to new ideas and suggestions. 
 Goes without saying, issues/contributions are welcomed as well.
+
 #
 

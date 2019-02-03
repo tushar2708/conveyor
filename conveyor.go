@@ -20,7 +20,7 @@ type Conveyor struct {
 	progress         chan float64
 	duration         time.Duration
 	expectedDuration time.Duration
-	lcHandler        LifeCycleHandler
+	LifeCycle        LifeCycleHandler
 
 	workers []NodeWorker
 	joints  []JointWorker
@@ -93,7 +93,7 @@ func NewTimeoutConveyor(name string, bufferLen int, timeout time.Duration) (*Con
 	return conveyor, err
 }
 
-// NewTimeoutAndProgressConveyor creates a new Conveyor instance
+// NewTimeoutAndProgressConveyor creates a new Conveyor instance, with timeout and progress enabled
 func NewTimeoutAndProgressConveyor(name string, bufferLen int, lch LifeCycleHandler, timeout, expectedDuration time.Duration) (*Conveyor, error) {
 
 	if expectedDuration == 0 {
@@ -154,7 +154,7 @@ func newConveyorWithInbuiltCtx(name string, bufferLen int, lch LifeCycleHandler,
 		Name:      name,
 		bufferLen: bufferLen,
 		ctx:       ctx,
-		lcHandler: lch,
+		LifeCycle: lch,
 	}
 
 	return cnv, nil
@@ -177,7 +177,7 @@ func newConveyor(name string, bufferLen int, lch LifeCycleHandler, timeout time.
 		Name:      name,
 		bufferLen: bufferLen,
 		ctx:       ctx,
-		lcHandler: lch,
+		LifeCycle: lch,
 	}
 
 	return cnv, nil
@@ -385,7 +385,7 @@ func (cnv *Conveyor) cleanup(abruptKill bool) {
 			close(cnv.progress)
 		})
 	}
-	if abruptKill == false && cnv.lcHandler != nil {
+	if abruptKill == false {
 		if err := cnv.MarkCurrentState(StateFinished); err != nil {
 			log.Printf("Conveyor:[%s] unable to set status as 'finished': Error:[%v]\n", cnv.Name, err)
 		}
@@ -427,11 +427,11 @@ trackProgress:
 
 // MarkCurrentState marks the current stage of conveyor using internal life-cycle handler interface
 func (cnv *Conveyor) MarkCurrentState(state string) error {
-	if cnv.lcHandler == nil {
+	if cnv.LifeCycle == nil {
 		return ErrLifeCycleNotSupported
 	}
 
-	statusMarkerFunc := getStateMarker(state, cnv.lcHandler)
+	statusMarkerFunc := getStateMarker(state, cnv.LifeCycle)
 	if statusMarkerFunc == nil {
 		return fmt.Errorf("given state '%s' is not supported by conveyor. "+
 			"Look for 'Valid States for a Conveyor' in docs", state)

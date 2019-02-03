@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-// NodeExecutor interface binds to nodes that have the capability to fetch intermidiate data, and forward it to next node
+// NodeExecutor interface is the interface that you need to implement in your own types of nodes
 type NodeExecutor interface {
 	GetName() string
 	GetUniqueIdentifier() string
@@ -14,7 +14,7 @@ type NodeExecutor interface {
 	CleanUp() error
 }
 
-// JointExecutor interface binds to nodes that have the capability to fetch intermidiate data, and forward it to next node
+// JointExecutor interface is the interface that you need to implement in your own types of joints
 type JointExecutor interface {
 	GetName() string
 	GetUniqueIdentifier() string
@@ -24,7 +24,7 @@ type JointExecutor interface {
 	OutputCount() int
 }
 
-// ConcreteNodeExecutor struct represents a concrete node structure
+// ConcreteNodeExecutor struct represents a concrete node structure, you should compose it into your node structures
 type ConcreteNodeExecutor struct {
 	Name string
 	Data interface{}

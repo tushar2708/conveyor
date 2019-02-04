@@ -10,15 +10,12 @@
 
 [![Test Coverage](https://api.codeclimate.com/v1/badges/e6c8164f8cbf98490fe8/test_coverage)](https://codeclimate.com/github/tushar2708/conveyor/test_coverage)
 
-
 A go pipeline management library, supporting concurrent pipelines, with multiple nodes and joints.
 
-###### TL;DR
-If you are already aware of what a pipeline is, you can move on to [examples.](https://github.com/tushar2708/conveyor/tree/master/examples "Conveyor Examples") or [Implementation](https://github.com/tushar2708/conveyor#how-to-implement-your-own-nodes) section. 
+**TL;DR:** 
+A pipeline is a standard concurrency pattern in Go, at least in terms of use case & functionality. And there are multiple ways people create them based on their specific requirements. This project is my attempt to create a generic one that can be used in most, if not all use-cases. If you are already aware of what a pipeline is, you can move on to [examples.](https://github.com/tushar2708/conveyor/tree/master/examples "Conveyor Examples") or [Implementation](https://github.com/tushar2708/conveyor#how-to-implement-your-own-nodes) section. 
 
-Also, you can know more about pipelines from [here](https://blog.golang.org/pipelines "Go Pipelines")
-
-A Go pipeline is a standard concurrency pattern, at least in terms of use case. And there are multiple ways people create them based on their requirements. This is my attempt to make one that can be used in most, if not all use-cases.
+You can also read more about pipelines from [here](https://blog.golang.org/pipelines "Go Pipelines")
 
 ## What does Conveyor do?
 *Conveyor* does what the name suggests. Just like a conveyor belt, or a production-line, 
@@ -36,22 +33,21 @@ They can distribute, or replicate incoming data across branches.
 
 There are 3 kind of Nodes:
 
-1. *Source Nodes*: These are the nodes that are the source of data. It may be a database, a file, a data stream, 
+1. **Source Nodes**: These are the nodes that are the source of data. It may be a database, a file, a data stream, 
 an API server, or anything that can generate new bits of data. In short, create some data, and send it forward.
-2. *Operation Nodes*: These are the nodes that "do something" with the data. They might process/enrich/change/replace 
+2. **Operation Nodes**: These are the nodes that "do something" with the data. They might process/enrich/change/replace 
 the data, based on your business logic. The example shows a simple example of squaring/adding operations. 
 In your application, it may be making API calls to other services, doing matrix multiplications, etc. 
 In short, take data from previous node, and send modified/new data to next node. 
-3. *Sink* is supposed to be the last node(s) in the conveyor. This is where you finalise your work, may be send the final 
-data to someone else, save it into a database, or write it to a file, or just print it on console.
+3. **Sink Nodes**: These are supposed to be the last node(s) in the conveyor. This is where you finalise your work, may be send the final data to some other external API/stream, save it to a database/file, or just print it on console.
 
 If we talk about Joints, there can be multiple implementation, based on your need.
-For now, there is a built-in joint that conveyor have(ReplicateJoint), 
-which replicates same data to be sent to multiple nodes at next stage.
+For now, there is a built-in joint(*ReplicateJoint*) that conveyor has, 
+which replicates same data to be sent to multiple nodes at next stage. More will be added in future.
 
-## How to implement your own nodes?
+## How to implement your own nodes and joints?
 
-Lets talk about, "How you can make your own nodes and joints". There are 2 interfaces, for Nodes & Joints, respectively:
+There are these 2 interfaces that you need to implement in your own types, for Nodes & Joints, respectively:
 
 ```go
 // NodeExecutor interface is the interface that you need to implement by your own types of nodes
@@ -84,11 +80,12 @@ type JointExecutor interface {
 * `CleanUp()` is called once node's job is completed. To do any cleanup activity 
 (like closing a file/database connection, or to wait till your other go-routines finish)
 
-  If you don't want to implement all these methods, it makes sense. 
-  There's a struct `ConcreteNodeExecutor` that gives default implementations of these 4 methods.
-  You can get up and running without them, but for an actual application, 
-  where hopefully, you will need concurrency, don't forget to return something >1 from `Count()`.
-   it's default value is 1. Also, always `Cleanup()` after yourself.  
+
+If you don't want to implement all of these methods, it makes sense. 
+There's a struct `conveyor.ConcreteNodeExecutor` that gives default implementations of these 4 methods.
+You can get up and running without them, but for an actual application, 
+where hopefully, you will need concurrency, don't forget to return "something > 1: from `Count()`.
+it's default value is 1. Also, always `Cleanup()` after yourself.  
  
  But, you must implement one of the below 2 methods, based on what you want your node to do.
  Their default implementation just returns `ErrExecuteNotImplemented` error.
@@ -110,19 +107,17 @@ If there are 10 instances of this function running, and all of them return,
 Conveyor will take that as a signal to shutdown, the node, and the ones that come next to it.
 As a rule of thumb, always let your source dictate when to finish up, all other will automatically follow it's lead.
 
-### Why did I go for the approach of "Implement an interface", and not "Write a function", like the one mentioned [here](https://blog.golang.org/pipelines) ?
-A function is what I started with, but I soon felt that if I am going to do anything real, and flexible I need something
-more than a single function. For example, I might want to run a SQL query, and fetch the results inside the source node,
-before starting the conveyor (while creating the executor itself, say inside a `func New MySQLSource()`), 
+### Why did I go for the approach of "Implementing an interface", and not "Writing a function" for each node, like the one mentioned [here](https://blog.golang.org/pipelines) ?
+A function is what I had started with, but soon realised that if I am going to do anything flexible, I need something
+more than a single function. For example, I might want to run a SQL query while creating a node, and fetch the results inside the source node, before starting the conveyor machinery (say, inside a `func New MySQLSource()`), 
 and then with each call of `Execute()`, I would just return the next entry.
 Or if I am using `ExecuteLoop()` I can just keep writing to the output channel inside a for loop.
 
 I couldn't do it elegantly using just a function. Also the `Count()` lets each node decide,
- how many concurrent go-routines should run for it. Which brings us to an important warning.
- Always keep your `Execute()` & `ExecuteLoop()` methods **race-free**. 
- Don't modify any of the receiver struct's parameters, inside these function. 
- Just work with the incoming data, and stream th output to the next channel(s)
- If your read operation, isn't race-free (eg. reading from a file), 
+ how many concurrent go-routines should run for it. Which brings us to the next important gotcha- Always keep your `Execute()` & `ExecuteLoop()` methods **race-free**. 
+ Don't modify any of the receiver struct's parameters, inside these 2 functions. 
+ Just work with the incoming data, and stream the output to the next channel(s)
+ If your read operation(for source), isn't race-free (eg. reading from a file), 
  consider using a single go-routine for source, and more for heavy lifting in later nodes. 
 
 ## Monitoring, Logging, Progress tracking, and Timeout/Killing.

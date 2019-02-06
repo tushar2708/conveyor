@@ -1,13 +1,11 @@
 # conveyor
 
-[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Ftushar2708%2Fconveyor.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Ftushar2708%2Fconveyor?ref=badge_shield)
-
 [![GitHub license](https://img.shields.io/github/license/mashape/apistatus.svg)]()
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Ftushar2708%2Fconveyor.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Ftushar2708%2Fconveyor?ref=badge_shield)
 
 [![HitCount](http://hits.dwyl.io/tushar2708/conveyor.svg)](http://hits.dwyl.io/tushar2708/conveyor)
 
 [![Maintainability](https://api.codeclimate.com/v1/badges/e6c8164f8cbf98490fe8/maintainability)](https://codeclimate.com/github/tushar2708/conveyor/maintainability)
-
 [![Test Coverage](https://api.codeclimate.com/v1/badges/e6c8164f8cbf98490fe8/test_coverage)](https://codeclimate.com/github/tushar2708/conveyor/test_coverage)
 
 A go pipeline management library, supporting concurrent pipelines, with multiple nodes and joints.
@@ -82,15 +80,15 @@ type JointExecutor interface {
 
 
 If you don't want to implement all of these methods, it makes sense. 
-There's a struct `conveyor.ConcreteNodeExecutor` that gives default implementations of these 4 methods.
-You can get up and running without them, but for an actual application, 
+There's a struct `conveyor.ConcreteNodeExecutor` that you can extend, which gives default implementations of these 4 methods.
+You can get up and running without overriding them, but for an actual application, 
 where hopefully, you will need concurrency, don't forget to return "something > 1: from `Count()`.
 it's default value is 1. Also, always `Cleanup()` after yourself.  
  
  But, you must implement one of the below 2 methods, based on what you want your node to do.
  Their default implementation just returns `ErrExecuteNotImplemented` error.
 
-* Execute() receives a `map[string]interface{}` (inData) as input, and returns a `map[string]interface{}` as output.
+* **Execute()** receives a `map[string]interface{}` (inData) as input, and returns a `map[string]interface{}` as output.
 This is the method that you must implement based on what you want your node to do. This is the method gets called, 
 if you have added your node to work in "Transaction Mode" (check example for more on that). In most cases, you can just
 get the most out of this method. Here we create a new Go-routine for each request, and number of go-routines running 
@@ -99,7 +97,7 @@ conveyor will assume that it's time to finish up, and will stop reading any more
 and will gracefully shutdown after processing already read data. Generally, if any node returns a non-nil error, 
 that particular unit of data would be dropped, and won't be sent to the next node.
 
-* ExecuteLoop() gets called if your Executor has been added to work in "Loop Mode". 
+* **ExecuteLoop()** gets called if your Executor has been added to work in "Loop Mode". 
 It receives 2 channels (inChan & outChan) having `map[string]interface{}`.
 You will be needed to run a for loop, to read inputs from `inChan`, and write it to `outChan`
 It is supposed to be a blocking function, but the loop should exit once you are done. 

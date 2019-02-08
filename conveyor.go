@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/satori/go.uuid"
 	"log"
 	"sync"
 	"time"
+
+	"github.com/satori/go.uuid"
 )
 
 var (

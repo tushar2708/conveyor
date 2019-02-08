@@ -115,9 +115,10 @@ workerLoop:
 			} else if err == ErrExecuteNotImplemented {
 				ctx.SendLog(0, fmt.Sprintf("Executor:[%s]", fwp.Executor.GetUniqueIdentifier()), err)
 				log.Fatalf("Improper setup of Executor[%s], Execute() method is required", fwp.Executor.GetUniqueIdentifier())
+			} else {
+				ctx.SendLog(2, fmt.Sprintf("Worker:[%s] for Executor:[%s] Execute() Call Failed.",
+					fwp.Name, fwp.Executor.GetUniqueIdentifier()), err)
 			}
-			ctx.SendLog(2, fmt.Sprintf("Worker:[%s] for Executor:[%s] Execute() Call Failed.",
-				fwp.Name, fwp.Executor.GetUniqueIdentifier()), err)
 
 			return
 		}(inData)

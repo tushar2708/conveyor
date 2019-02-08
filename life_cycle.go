@@ -1,5 +1,10 @@
 package conveyor
 
+import (
+	"database/sql/driver"
+	"sync"
+)
+
 // Valid States for a Conveyor
 const (
 	// StatusPreparing status is used to mark a conveyor to be in "preparing" state
@@ -21,20 +26,32 @@ const (
 	StateInternalError = "internalError"
 )
 
-// LifeCycleHandler handles conveyor start/stop
-type LifeCycleHandler interface {
+var (
+	driversMu sync.RWMutex
+	drivers   = make(map[string]driver.Driver)
+)
+
+type ProgressUpdater interface {
 	GetState() (string, error)
 	GetStatusMsg() (string, error)
 	UpdateStatusMsg(string) error
 	GetProgress() (string, error)
 	UpdateProgress(string) error
+}
 
+type StateUpdater interface {
 	MarkPreparing() error
 	MarkStarted() error
 	MarkToKill() error
 	MarkKilled() error
 	MarkFinished() error
 	MarkError() error
+}
+
+// LifeCycleHandler handles conveyor start/stop
+type LifeCycleHandler interface {
+	ProgressUpdater
+	StateUpdater
 }
 
 func getStateMarker(state string, lch LifeCycleHandler) func() error {
@@ -57,3 +74,9 @@ func getStateMarker(state string, lch LifeCycleHandler) func() error {
 	}
 
 }
+
+
+type LocalLifeCycleHandler struct{
+
+}
+

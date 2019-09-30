@@ -3,6 +3,7 @@ package conveyor
 import (
 	"fmt"
 	"log"
+	"runtime/debug"
 	"sync"
 
 	"golang.org/x/sync/semaphore"
@@ -45,7 +46,7 @@ type WPool struct {
 	sem  *semaphore.Weighted
 }
 
-// ConcreteNodeWorker to run different nodes of comex graph
+// ConcreteNodeWorker to run different nodes
 type ConcreteNodeWorker struct {
 	*WPool
 	WorkerCount int
@@ -53,13 +54,13 @@ type ConcreteNodeWorker struct {
 	Executor    NodeExecutor
 }
 
-// ConcreteJointWorker to run different nodes of comex graph
+// ConcreteJointWorker to run different joints
 type ConcreteJointWorker struct {
 	*WPool
 	Executor JointExecutor
 }
 
-// NodeWorker interface binds to nodes that have the capability to fetch intermidiate data, and forward it to next node
+// NodeWorker interface binds to nodes that have the capability to fetch intermediate data, and forward it to next node
 type NodeWorker interface {
 	Start(ctx CnvContext) error
 	WaitAndStop(ctx CnvContext) error
@@ -179,4 +180,18 @@ func (wp *WPool) Wait() {
 
 func (wp *WPool) run() {
 	wp.Wg.Done()
+}
+
+
+func (cnw *ConcreteNodeWorker) recovery(ctx CnvContext, caller string) {
+	if r := recover(); r != nil {
+		ctx.SendLog(0, fmt.Sprintf("Worker:[%s] for Executor:[%s] recovered:[%v] caller:[%s]",
+			cnw.Name, cnw.Executor.GetUniqueIdentifier(), r, caller), nil)
+
+		fmt.Println("recovered:", r, caller)
+		debug.PrintStack()
+	} else {
+		fmt.Println("no recovery needed:", r, caller)
+
+	}
 }

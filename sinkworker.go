@@ -71,7 +71,7 @@ workerLoop:
 		}
 
 		go func(data map[string]interface{}) {
-			// defer fmt.Println("sink sem release 1")
+			defer swp.recovery(ctx, "SinkWorkerPool")
 			defer swp.sem.Release(1)
 			if ok {
 				_, err := swp.Executor.Execute(ctx, data)

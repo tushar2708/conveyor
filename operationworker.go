@@ -98,10 +98,9 @@ workerLoop:
 			ctx.SendLog(0, fmt.Sprintf("Executor:[%s], sem acquire failed", fwp.Executor.GetUniqueIdentifier()), err)
 			break workerLoop
 		}
-		// fmt.Println("Operation sem acquire 1")
 
 		go func(data map[string]interface{}) {
-			// defer fmt.Println("Operation sem release 1")
+			defer fwp.recovery(ctx, "OperationWorkerPool")
 			defer fwp.sem.Release(1)
 
 			out, err := fwp.Executor.Execute(ctx, data)

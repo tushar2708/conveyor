@@ -5,15 +5,7 @@ import (
 	"log"
 )
 
-// // FetchExecutor interface binds to nodes that have the capability to fetch intermidiate data, and forward it to next node
-// type FetchExecutor interface {
-// 	FetchAndSend(inputChannel chan interface{}, outputChannel []chan interface{})
-// 	Start()
-// 	Stop()
-// 	GetPool() *OperationWorkerPool
-// }
-
-// JointWorkerPool struct provides the worker pool infra for Fetch interface
+// JointWorkerPool struct provides the worker pool infra for Joint interface, that act as connections between nodes
 type JointWorkerPool struct {
 	*ConcreteJointWorker
 	nextWorkerCount int
@@ -42,23 +34,23 @@ func (jwp *JointWorkerPool) CreateChannels(buffer int) {
 	}
 }
 
-// GetInputChannels returns the input channel of Fetch WorkerPool
+// GetInputChannels returns the input channel of Joint WorkerPool
 func (jwp *JointWorkerPool) GetInputChannels() ([]chan map[string]interface{}, error) {
 	return jwp.inputChannels, nil
 }
 
-// GetOutputChannels returns the output channel of Fetch WorkerPool
+// GetOutputChannels returns the output channel of Joint WorkerPool
 func (jwp *JointWorkerPool) GetOutputChannels() ([]chan map[string]interface{}, error) {
 	return jwp.outputChannels, nil
 }
 
-// SetInputChannels updates the input channel of Source WorkerPool
+// SetInputChannels updates the input channel of Joint WorkerPool
 func (jwp *JointWorkerPool) SetInputChannels(inChans []chan map[string]interface{}) error {
 	jwp.inputChannels = inChans
 	return nil
 }
 
-// SetOutputChannels updates the output channel of Source WorkerPool
+// SetOutputChannels updates the output channel of Joint WorkerPool
 func (jwp *JointWorkerPool) SetOutputChannels(outChans []chan map[string]interface{}) error {
 	jwp.outputChannels = outChans
 	return nil
@@ -92,7 +84,7 @@ func (jwp *JointWorkerPool) Start(ctx CnvContext) error {
 	return nil
 }
 
-// WaitAndStop OperationWorkerPool
+// WaitAndStop JointWorkerPool
 func (jwp *JointWorkerPool) WaitAndStop() error {
 	jwp.Wg.Wait()
 

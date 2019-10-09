@@ -14,5 +14,4 @@ func newNodeWorker(executor NodeExecutor, mode WorkerMode, workerType string) (N
 	}
 
 	return nil, ErrInvalidWorkerType
-
 }

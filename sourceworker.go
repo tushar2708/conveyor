@@ -93,6 +93,7 @@ workerLoop:
 		}
 
 		go func() {
+			defer swp.recovery(ctx, "SourceWorkerPool")
 			defer swp.sem.Release(1)
 			outData, err := swp.Executor.Execute(ctx, nil)
 			if err == nil {
@@ -104,7 +105,8 @@ workerLoop:
 				swp.outputChannel <- outData
 			} else if err == ErrExecuteNotImplemented {
 				ctx.SendLog(0, fmt.Sprintf("Executor:[%s]", swp.Executor.GetUniqueIdentifier()), err)
-				log.Fatalf("Improper setup of Executor[%s], Execute() method is required", swp.Executor.GetUniqueIdentifier())
+				log.Fatalf("Improper setup of Executor[%s], Execute() method is required",
+					swp.Executor.GetUniqueIdentifier())
 			} else if err == ErrSourceExhausted {
 				ctx.SendLog(0, fmt.Sprintf("Executor:[%s]", swp.Executor.GetUniqueIdentifier()), err)
 				doneMutex.Lock()

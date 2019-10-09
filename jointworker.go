@@ -10,7 +10,7 @@ type JointWorkerPool struct {
 	*ConcreteJointWorker
 	nextWorkerCount int
 	inputChannels   []chan map[string]interface{}
-	outputChannels []chan map[string]interface{}
+	outputChannels  []chan map[string]interface{}
 }
 
 // NewJointWorkerPool creates a new OperationWorkerPool

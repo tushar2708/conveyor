@@ -23,7 +23,6 @@ type CtxData struct {
 	status         chan string
 	cancelProgress context.CancelFunc
 	// cancelAll      context.CancelFunc
-
 }
 
 // CnvContext is an interface, which is satisfied by CnvContext.

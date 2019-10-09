@@ -182,7 +182,6 @@ func (wp *WPool) run() {
 	wp.Wg.Done()
 }
 
-
 func (cnw *ConcreteNodeWorker) recovery(ctx CnvContext, caller string) {
 	if r := recover(); r != nil {
 		ctx.SendLog(0, fmt.Sprintf("Worker:[%s] for Executor:[%s] recovered:[%v] caller:[%s]",

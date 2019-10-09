@@ -75,8 +75,5 @@ func getStateMarker(state string, lch LifeCycleHandler) func() error {
 
 }
 
-
-type LocalLifeCycleHandler struct{
-
+type LocalLifeCycleHandler struct {
 }
-

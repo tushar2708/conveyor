@@ -117,9 +117,8 @@ func (cnw *ConcreteNodeWorker) startLoopMode(ctx CnvContext, inputChannel chan m
 
 	for i := 0; i < cnw.WorkerCount; i++ {
 		cnw.Wg.Add(1)
-		// fmt.Println("src wg add 1")
 		go func() {
-			// defer fmt.Println("src wg done 1")
+			defer cnw.recovery(ctx, "ConcreteNodeWorker")
 			defer cnw.Wg.Done()
 			if err := cnw.Executor.ExecuteLoop(ctx, inputChannel, outChannel); err != nil {
 				if err == ErrExecuteLoopNotImplemented {

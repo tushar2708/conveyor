@@ -188,8 +188,5 @@ func (cnw *ConcreteNodeWorker) recovery(ctx CnvContext, caller string) {
 
 		fmt.Println("recovered:", r, caller)
 		debug.PrintStack()
-	} else {
-		ctx.SendLog(3, fmt.Sprintf("Worker:[%s] no recovery needed for Executor:[%s] recovered:[%v] caller:[%s]",
-			cnw.Name, cnw.Executor.GetUniqueIdentifier(), r, caller), nil)
 	}
 }

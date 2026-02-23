@@ -1,10 +1,5 @@
 package conveyor
 
-import (
-	"database/sql/driver"
-	"sync"
-)
-
 // Valid States for a Conveyor
 const (
 	// StatusPreparing status is used to mark a conveyor to be in "preparing" state
@@ -24,11 +19,6 @@ const (
 
 	// StateInternalError status is used to indicate that conveyor couldn't finish due to some internal error
 	StateInternalError = "internalError"
-)
-
-var (
-	driversMu sync.RWMutex
-	drivers   = make(map[string]driver.Driver)
 )
 
 type ProgressUpdater interface {

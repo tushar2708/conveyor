@@ -51,13 +51,13 @@ type ConcreteNodeWorker struct {
 	*WPool
 	WorkerCount int
 	Mode        WorkerMode
-	Executor    NodeExecutor
+	Executor    nodeExecutor
 }
 
 // ConcreteJointWorker to run different joints
 type ConcreteJointWorker struct {
 	*WPool
-	Executor JointExecutor
+	Executor jointExecutor
 }
 
 // NodeWorker interface binds to nodes that have the capability to fetch intermediate data, and forward it to next node
@@ -66,10 +66,10 @@ type NodeWorker interface {
 	WaitAndStop(ctx CnvContext) error
 	CreateChannels(int)
 	WorkerType() string
-	SetInputChannel(chan map[string]interface{}) error
-	SetOutputChannel(chan map[string]interface{}) error
-	GetInputChannel() (chan map[string]interface{}, error)
-	GetOutputChannel() (chan map[string]interface{}, error)
+	SetInputChannel(chan any) error
+	SetOutputChannel(chan any) error
+	GetInputChannel() (chan any, error)
+	GetOutputChannel() (chan any, error)
 }
 
 // JointWorker interface binds to nodes that have the capability to fetch intermidiate data, and forward it to next node
@@ -77,15 +77,15 @@ type JointWorker interface {
 	Start(ctx CnvContext) error
 	WaitAndStop() error
 	CreateChannels(int)
-	SetInputChannels([]chan map[string]interface{}) error
-	SetOutputChannels([]chan map[string]interface{}) error
-	GetInputChannels() ([]chan map[string]interface{}, error)
-	GetOutputChannels() ([]chan map[string]interface{}, error)
-	AddInputChannel(chan map[string]interface{}) error
-	AddOutputChannel(chan map[string]interface{}) error
+	SetInputChannels([]chan any) error
+	SetOutputChannels([]chan any) error
+	GetInputChannels() ([]chan any, error)
+	GetOutputChannels() ([]chan any, error)
+	AddInputChannel(chan any) error
+	AddOutputChannel(chan any) error
 }
 
-func newConcreteNodeWorker(executor NodeExecutor, mode WorkerMode) *ConcreteNodeWorker {
+func newConcreteNodeWorker(executor nodeExecutor, mode WorkerMode) *ConcreteNodeWorker {
 
 	wCnt := executor.Count()
 	if wCnt < 1 {
@@ -112,15 +112,15 @@ func (cnw *ConcreteNodeWorker) Start() {
 }
 
 // startLoopMode starts ConcreteNodeWorker in loop mode
-func (cnw *ConcreteNodeWorker) startLoopMode(ctx CnvContext, inputChannel chan map[string]interface{},
-	outChannel chan map[string]interface{}) error {
+func (cnw *ConcreteNodeWorker) startLoopMode(ctx CnvContext, inputChannel chan any,
+	outChannel chan any) error {
 
 	for i := 0; i < cnw.WorkerCount; i++ {
 		cnw.Wg.Add(1)
 		go func() {
 			defer cnw.recovery(ctx, "ConcreteNodeWorker")
 			defer cnw.Wg.Done()
-			if err := cnw.Executor.ExecuteLoop(ctx, inputChannel, outChannel); err != nil {
+			if err := cnw.Executor.executeLoopUntyped(ctx, inputChannel, outChannel); err != nil {
 				if err == ErrExecuteLoopNotImplemented {
 					ctx.SendLog(0, fmt.Sprintf("Executor:[%s] ", cnw.Executor.GetUniqueIdentifier()), err)
 

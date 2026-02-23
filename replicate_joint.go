@@ -1,59 +1,50 @@
 package conveyor
 
-import (
-	"errors"
-)
-
-// ReplicateJoint is a plumbing joint that connects a source/operation node to multiple operation/sink nodes
-type ReplicateJoint struct {
-	*ConcreteJointExecutor
+// ReplicateJoint is a generic plumbing joint that connects a source/operation node
+// to multiple operation/sink nodes. It replicates the same data to all output channels.
+type ReplicateJoint[T any] struct {
+	Name         string
 	OutChanCount int
 }
 
-var (
-	// ErrNoInputChannel error
-	ErrNoInputChannel = errors.New("number of input channels is 0")
-
-	// ErrNoOutputChannel error
-	ErrNoOutputChannel = errors.New("number of output channels is 0")
-
-	// ErrMultipleInputChannels error
-	ErrMultipleInputChannels = errors.New("only one input channel can be replicated")
-
-	// ErrOneToOneConnection error
-	ErrOneToOneConnection = errors.New("replicate joint isn't needed for one-to one mapping, " +
-		"you can just link the nodes directly")
-)
-
-// NewReplicateJoint creates a new joint to replicate same data to multiple channels
-func NewReplicateJoint(name string, outChanCount int) (*ReplicateJoint, error) {
-
-	rj := &ReplicateJoint{
-		ConcreteJointExecutor: &ConcreteJointExecutor{
-			Name: name,
-		},
+// NewReplicateJoint creates a new generic joint to replicate same data to multiple channels.
+func NewReplicateJoint[T any](name string, outChanCount int) (*ReplicateJoint[T], error) {
+	rj := &ReplicateJoint[T]{
+		Name:         name,
 		OutChanCount: outChanCount,
 	}
 	return rj, nil
 }
 
-// NewReplicateJointWithContext creates a new joint (with context) to replicate same data to multiple channels
-func NewReplicateJointWithContext(cnvCtx CnvContext, name string, outChanCount int) (*ReplicateJoint, error) {
-
-	rj := &ReplicateJoint{
-		ConcreteJointExecutor: &ConcreteJointExecutor{
-			Name: name,
-		},
-		OutChanCount: outChanCount,
-	}
-	return rj, nil
+// GetName returns the name of the joint executor.
+func (rj *ReplicateJoint[T]) GetName() string {
+	return rj.Name
 }
 
-// ExecuteLoop method produces data for other nodes from inputChannel file, and broadcasts copies of this data on all of it's output channels
-func (rj *ReplicateJoint) ExecuteLoop(cnvCtx CnvContext, inChans []chan map[string]interface{}, outChans []chan map[string]interface{}) error {
+// GetUniqueIdentifier returns a unique string identifying this executor.
+func (rj *ReplicateJoint[T]) GetUniqueIdentifier() string {
+	return rj.Name
+}
 
-	// log.Printf("going to replicate data to %d channels", rj.OutChanCount)
+// Count returns the number of concurrent executor instances required.
+func (rj *ReplicateJoint[T]) Count() int {
+	return 1
+}
 
+// InputCount returns the number of input channels this joint accepts.
+func (rj *ReplicateJoint[T]) InputCount() int {
+	return 1
+}
+
+// OutputCount returns the number of output channels this joint fans out to.
+func (rj *ReplicateJoint[T]) OutputCount() int {
+	return rj.OutChanCount
+}
+
+// ExecuteLoop reads from a single input channel and broadcasts each value to all output channels.
+// It returns an error immediately if the channel configuration is invalid; otherwise it
+// runs until the input channel is closed, then returns nil.
+func (rj *ReplicateJoint[T]) ExecuteLoop(cnvCtx CnvContext, inChans []chan T, outChans []chan T) error {
 	inChanCount := len(inChans)
 	outChanCount := len(outChans)
 
@@ -70,7 +61,7 @@ func (rj *ReplicateJoint) ExecuteLoop(cnvCtx CnvContext, inChans []chan map[stri
 	}
 
 	if inChanCount == 1 && outChanCount == 1 {
-		return ErrMultipleInputChannels
+		return ErrOneToOneConnection
 	}
 
 	inChan := inChans[0]
@@ -82,9 +73,4 @@ func (rj *ReplicateJoint) ExecuteLoop(cnvCtx CnvContext, inChans []chan map[stri
 	}
 
 	return nil
-}
-
-// OutputCount returns the number of executors required
-func (rj *ReplicateJoint) OutputCount() int {
-	return rj.OutChanCount
 }

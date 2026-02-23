@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"reflect"
 	"sync"
 	"time"
 
@@ -35,6 +36,9 @@ type Conveyor struct {
 
 	startOnce           sync.Once // To ensure that conveyor can't start again
 	openForConfigChange bool
+
+	lastNodeOutType  reflect.Type
+	lastJointOutType reflect.Type
 
 	cleanupOnce sync.Once // To ensure that conveyor can't be cleaned up again
 }
@@ -91,7 +95,7 @@ func (cnv *Conveyor) lockConfig() {
 // SetID sets the id of Conveyor to a given string
 // Will have no effect, once you add your first node
 func (cnv *Conveyor) SetID(id string) *Conveyor {
-	if cnv.openForConfigChange == false {
+	if !cnv.openForConfigChange {
 		return cnv
 	}
 	cnv.id = id
@@ -103,7 +107,7 @@ func (cnv *Conveyor) SetID(id string) *Conveyor {
 // If you change the context using "SetCustomContext()" after calling this method,
 // timeout will get reset
 func (cnv *Conveyor) SetTimeout(timeout time.Duration) *Conveyor {
-	if cnv.openForConfigChange == false {
+	if !cnv.openForConfigChange {
 		return cnv
 	}
 	if timeout <= 0 {
@@ -118,7 +122,7 @@ func (cnv *Conveyor) SetTimeout(timeout time.Duration) *Conveyor {
 // Also enables progress based on this value of expectedDuration
 // Will have no effect, once you add your first node
 func (cnv *Conveyor) EnableProgress(expectedDuration time.Duration) *Conveyor {
-	if cnv.openForConfigChange == false {
+	if !cnv.openForConfigChange {
 		return cnv
 	}
 
@@ -137,7 +141,7 @@ func (cnv *Conveyor) EnableProgress(expectedDuration time.Duration) *Conveyor {
 // SetLifeCycleHandler sets the conveyor's LifeCycleHandler interface to a given implementation
 // Will have no effect, once you add your first node
 func (cnv *Conveyor) SetLifeCycleHandler(lch LifeCycleHandler) *Conveyor {
-	if cnv.openForConfigChange == false {
+	if !cnv.openForConfigChange {
 		return cnv
 	}
 	cnv.lifeCycle = lch
@@ -148,7 +152,7 @@ func (cnv *Conveyor) SetLifeCycleHandler(lch LifeCycleHandler) *Conveyor {
 // Will have no effect, once you add your first node
 // This method must be called before you call "SetTimeout()"
 func (cnv *Conveyor) SetCustomContext(ctx CnvContext) *Conveyor {
-	if cnv.openForConfigChange == false {
+	if !cnv.openForConfigChange {
 		return cnv
 	}
 	cnv.ctx = ctx
@@ -203,110 +207,225 @@ func (cnv *Conveyor) GetLastWorker() (NodeWorker, error) {
 	return nil, ErrEmptyConveyor
 }
 
-// AddNodeExecutor creates a worker for a given executor (based on workerMode & workerType)
-// And then links it to the last "Node" added to the conveyor, by creating and mapping connecting channels
-// In case there was no node added previously, it skips the linking part
-func (cnv *Conveyor) AddNodeExecutor(nodeExecutor NodeExecutor, workerMode WorkerMode, workerType string) error {
-	nodeWorker, err := newNodeWorker(nodeExecutor, workerMode, workerType)
+// AddSource adds a source node to the conveyor. It must be the first node added.
+// TOut is the type of data this source produces.
+//
+// The executor is wrapped into a type-erased adapter, a SourceWorkerPool is created
+// for it, and the pool is appended to the conveyor's worker list. After a successful
+// call, cnv.lastNodeOutType is set to reflect.TypeFor[TOut]() so that the next
+// AddOperation or AddSink call can validate its input type at construction time.
+func AddSource[TOut any](cnv *Conveyor, exec SourceExecutor[TOut], mode WorkerMode) error {
+	wrapped := wrapSource[TOut](exec)
+	workerType := WorkerTypeSource
+
+	nodeWorker, err := newNodeWorker(wrapped, mode, workerType)
 	if err != nil {
 		return err
 	}
 
 	if addErr := cnv.AddNodeWorker(nodeWorker, true); addErr != nil {
 		fmt.Printf("Adding %s [type:%s] to conveyor failed. Error:[%v]\n",
-			nodeExecutor.GetName(), workerType, addErr)
+			exec.GetName(), workerType, addErr)
 		return addErr
 	}
 
-	// As a node is now added successfully, can't change configuration anymore
+	cnv.lastNodeOutType = reflect.TypeFor[TOut]()
 	cnv.lockConfig()
-
 	return nil
 }
 
-// AddJointExecutor creates a worker for a given executor (based on workerMode & workerType)
-// And then links it to the last "Node" added to the conveyor, by creating and mapping connecting channels
-// In case there was no node added previously, it skips the linking part
-func (cnv *Conveyor) AddJointExecutor(jointExecutor JointExecutor) error {
-
-	jointWorker := NewJointWorkerPool(jointExecutor)
-
-	if err := cnv.AddJointWorker(jointWorker); err != nil {
-		fmt.Printf("Adding %s to conveyor failed. Error:[%v]\n",
-			jointExecutor.GetName(), err)
-		return err
+// AddOperation adds an operation node to the conveyor.
+// TIn must match the output type of the previously added node; a type mismatch
+// returns ErrTypeMismatch at construction time before any workers are started.
+// TOut is the type this operation produces; it is recorded so the next node can
+// validate its own input type.
+func AddOperation[TIn, TOut any](cnv *Conveyor, exec OperationExecutor[TIn, TOut], mode WorkerMode) error {
+	expectedIn := reflect.TypeFor[TIn]()
+	if cnv.lastNodeOutType != nil && cnv.lastNodeOutType != expectedIn {
+		return fmt.Errorf("%w: expected input type %v but got %v", ErrTypeMismatch, cnv.lastNodeOutType, expectedIn)
 	}
 
-	// As a node is now added successfully, can't change configuration anymore
-	cnv.lockConfig()
+	wrapped := wrapOperation[TIn, TOut](exec)
+	workerType := WorkerTypeOperation
 
-	return nil
-}
-
-// AddJointExecutorAfterNode creates a worker for a given executor (based on workerMode & workerType)
-// And then links it to the last "Joint" added to the conveyor, by creating and mapping connecting channels
-// In case there was no "Joint" added previously, it returns an error
-func (cnv *Conveyor) AddJointExecutorAfterNode(jointExecutor JointExecutor, workerMode WorkerMode, workerType string) error {
-
-	nodeCount := len(cnv.workers)
-
-	if nodeCount == 0 {
-		return ErrNoNodesAvailable
-	}
-
-	jointWorker := NewJointWorkerPool(jointExecutor)
-
-	if addErr := cnv.AddJointWorker(jointWorker); addErr != nil {
-		fmt.Printf("Adding joint-%s after node[type:%s] to conveyor failed. Error:[%v]\n",
-			jointExecutor.GetName(), workerType, addErr)
-		return addErr
-	}
-
-	// Pick the last node that was added to this conveyor
-	nodeWorker := cnv.workers[nodeCount-1]
-
-	// Link last node before sinks to 0th input channel of the broadcast joint
-	linkErr := LinkJointAfterNode(nodeWorker, jointWorker, 0)
-	if linkErr != nil {
-		return linkErr
-	}
-
-	return nil
-}
-
-// AddNodeExecutorAfterJoint creates a worker for a given executor (based on workerMode & workerType)
-// And then links it to the last "Joint" added to the conveyor, by creating and mapping connecting channels
-// In case there was no "Joint" added previously, it returns an error
-func (cnv *Conveyor) AddNodeExecutorAfterJoint(nodeExecutor NodeExecutor, workerMode WorkerMode, workerType string) error {
-
-	jointCount := len(cnv.joints)
-
-	if jointCount == 0 {
-		return ErrNoJointsAvailable
-	}
-
-	nodeWorker, err := newNodeWorker(nodeExecutor, workerMode, workerType)
+	nodeWorker, err := newNodeWorker(wrapped, mode, workerType)
 	if err != nil {
 		return err
 	}
 
-	// Add nodeWorker to list, but don't link it's channels yet
-	if addErr := cnv.AddNodeWorker(nodeWorker, false); addErr != nil {
-		fmt.Printf("Adding node-%s[type:%s] after joint to conveyor failed. Error:[%v]\n",
-			nodeExecutor.GetName(), workerType, addErr)
+	if addErr := cnv.AddNodeWorker(nodeWorker, true); addErr != nil {
+		fmt.Printf("Adding %s [type:%s] to conveyor failed. Error:[%v]\n",
+			exec.GetName(), workerType, addErr)
 		return addErr
 	}
 
-	// Pick the last joint that was added to this conveyor
-	jointWorker := cnv.joints[jointCount-1]
+	cnv.lastNodeOutType = reflect.TypeFor[TOut]()
+	cnv.lockConfig()
+	return nil
+}
 
-	// Now link the newly created node after last joint
-	if err := LinkNodeAfterJoint(jointWorker, nodeWorker); err != nil {
-		fmt.Printf("Adding node-%s[type:%s] after joint to conveyor failed. Error:[%v]\n",
-			nodeExecutor.GetName(), workerType, err)
+// AddSink adds a sink node to the conveyor.
+// TIn must match the output type of the previously added node; a type mismatch
+// returns ErrTypeMismatch at construction time before any workers are started.
+// After a sink is added, cnv.lastNodeOutType is cleared to nil because sinks
+// produce no output for a subsequent node to consume.
+func AddSink[TIn any](cnv *Conveyor, exec SinkExecutor[TIn], mode WorkerMode) error {
+	expectedIn := reflect.TypeFor[TIn]()
+	if cnv.lastNodeOutType != nil && cnv.lastNodeOutType != expectedIn {
+		return fmt.Errorf("%w: expected input type %v but got %v", ErrTypeMismatch, cnv.lastNodeOutType, expectedIn)
+	}
+
+	wrapped := wrapSink[TIn](exec)
+	workerType := WorkerTypeSink
+
+	nodeWorker, err := newNodeWorker(wrapped, mode, workerType)
+	if err != nil {
 		return err
 	}
 
+	if addErr := cnv.AddNodeWorker(nodeWorker, true); addErr != nil {
+		fmt.Printf("Adding %s [type:%s] to conveyor failed. Error:[%v]\n",
+			exec.GetName(), workerType, addErr)
+		return addErr
+	}
+
+	cnv.lastNodeOutType = nil // sinks produce no output
+	cnv.lockConfig()
+	return nil
+}
+
+// AddJointAfterNode adds a joint executor after the last node in the conveyor.
+// TIn must match the output type of the last node added via AddSource or AddOperation;
+// a mismatch returns ErrTypeMismatch. ErrNoNodesAvailable is returned when no node
+// has been added yet.
+//
+// The joint's input channel index 0 is linked to the last node's output channel.
+// After a successful call, cnv.lastJointOutType is set to reflect.TypeFor[TOut]()
+// and cnv.lastNodeOutType is cleared so that subsequent nodes must be attached
+// through AddSinkAfterJoint or AddOperationAfterJoint.
+func AddJointAfterNode[TIn, TOut any](cnv *Conveyor, exec JointExecutor[TIn, TOut]) error {
+	expectedIn := reflect.TypeFor[TIn]()
+	if cnv.lastNodeOutType != nil && cnv.lastNodeOutType != expectedIn {
+		return fmt.Errorf("%w: expected input type %v but got %v", ErrTypeMismatch, cnv.lastNodeOutType, expectedIn)
+	}
+
+	nodeCount := len(cnv.workers)
+	if nodeCount == 0 {
+		return ErrNoNodesAvailable
+	}
+
+	wrapped := wrapJoint[TIn, TOut](exec)
+	jointWorker := NewJointWorkerPool(wrapped)
+
+	if addErr := cnv.AddJointWorker(jointWorker); addErr != nil {
+		fmt.Printf("Adding joint-%s after node to conveyor failed. Error:[%v]\n",
+			exec.GetName(), addErr)
+		return addErr
+	}
+
+	// Link the last node's output channel to input channel index 0 of the joint.
+	nodeWorker := cnv.workers[nodeCount-1]
+	if linkErr := LinkJointAfterNode(nodeWorker, jointWorker, 0); linkErr != nil {
+		return linkErr
+	}
+
+	// After a joint, nodes must be added via AddSinkAfterJoint / AddOperationAfterJoint,
+	// not through the linear AddOperation / AddSink path.
+	cnv.lastNodeOutType = nil
+	cnv.lastJointOutType = reflect.TypeFor[TOut]()
+	cnv.lockConfig()
+	return nil
+}
+
+// AddSinkAfterJoint adds a sink node after the last joint in the conveyor.
+// TIn must match the output type of the last joint added via AddJointAfterNode;
+// a mismatch returns ErrTypeMismatch. ErrNoJointsAvailable is returned when no
+// joint has been added yet.
+//
+// The node is appended to the worker list without automatic channel linking
+// (toLink=false) because its input channel is provided by the joint's fan-out,
+// not by the previous node in the linear chain.
+func AddSinkAfterJoint[TIn any](cnv *Conveyor, exec SinkExecutor[TIn], mode WorkerMode) error {
+	expectedIn := reflect.TypeFor[TIn]()
+	if cnv.lastJointOutType != nil && cnv.lastJointOutType != expectedIn {
+		return fmt.Errorf("%w: expected input type %v but got %v", ErrTypeMismatch, cnv.lastJointOutType, expectedIn)
+	}
+
+	jointCount := len(cnv.joints)
+	if jointCount == 0 {
+		return ErrNoJointsAvailable
+	}
+
+	wrapped := wrapSink[TIn](exec)
+	workerType := WorkerTypeSink
+
+	nodeWorker, err := newNodeWorker(wrapped, mode, workerType)
+	if err != nil {
+		return err
+	}
+
+	// Add to the worker list but skip automatic node-to-node linking; the joint
+	// will supply this node's input channel via LinkNodeAfterJoint below.
+	if addErr := cnv.AddNodeWorker(nodeWorker, false); addErr != nil {
+		fmt.Printf("Adding sink-%s after joint to conveyor failed. Error:[%v]\n",
+			exec.GetName(), addErr)
+		return addErr
+	}
+
+	// Wire a new output channel of the last joint to this node's input channel.
+	jointWorker := cnv.joints[jointCount-1]
+	if linkErr := LinkNodeAfterJoint(jointWorker, nodeWorker); linkErr != nil {
+		return linkErr
+	}
+
+	cnv.lockConfig()
+	return nil
+}
+
+// AddOperationAfterJoint adds an operation node after the last joint in the conveyor.
+// TIn must match the output type of the last joint added via AddJointAfterNode;
+// a mismatch returns ErrTypeMismatch. ErrNoJointsAvailable is returned when no
+// joint has been added yet.
+//
+// Like AddSinkAfterJoint, the node is appended without automatic channel linking
+// and is instead wired to the joint's next available output channel.
+// cnv.lastNodeOutType is updated to TOut so that further linear nodes can be
+// chained after this operation if needed.
+func AddOperationAfterJoint[TIn, TOut any](cnv *Conveyor, exec OperationExecutor[TIn, TOut], mode WorkerMode) error {
+	expectedIn := reflect.TypeFor[TIn]()
+	if cnv.lastJointOutType != nil && cnv.lastJointOutType != expectedIn {
+		return fmt.Errorf("%w: expected input type %v but got %v", ErrTypeMismatch, cnv.lastJointOutType, expectedIn)
+	}
+
+	jointCount := len(cnv.joints)
+	if jointCount == 0 {
+		return ErrNoJointsAvailable
+	}
+
+	wrapped := wrapOperation[TIn, TOut](exec)
+	workerType := WorkerTypeOperation
+
+	nodeWorker, err := newNodeWorker(wrapped, mode, workerType)
+	if err != nil {
+		return err
+	}
+
+	// Add to the worker list but skip automatic node-to-node linking; the joint
+	// will supply this node's input channel via LinkNodeAfterJoint below.
+	if addErr := cnv.AddNodeWorker(nodeWorker, false); addErr != nil {
+		fmt.Printf("Adding operation-%s after joint to conveyor failed. Error:[%v]\n",
+			exec.GetName(), addErr)
+		return addErr
+	}
+
+	// Wire a new output channel of the last joint to this node's input channel.
+	jointWorker := cnv.joints[jointCount-1]
+	if linkErr := LinkNodeAfterJoint(jointWorker, nodeWorker); linkErr != nil {
+		return linkErr
+	}
+
+	cnv.lastNodeOutType = reflect.TypeFor[TOut]()
+	cnv.lockConfig()
 	return nil
 }
 
@@ -414,7 +533,7 @@ func (cnv *Conveyor) cleanup(abruptKill bool) {
 			close(cnv.progress)
 		})
 	}
-	if abruptKill == false && cnv.lifeCycle != nil {
+	if !abruptKill && cnv.lifeCycle != nil {
 		if err := cnv.MarkCurrentState(StateFinished); err != nil {
 			log.Printf("Conveyor:[%s] unable to set status as 'finished': Error:[%v]\n", cnv.Name, err)
 		}

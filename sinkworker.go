@@ -10,11 +10,11 @@ import (
 // SinkWorkerPool struct provides the worker pool infra for Sink interface
 type SinkWorkerPool struct {
 	*ConcreteNodeWorker
-	inputChannel chan map[string]interface{}
+	inputChannel chan any
 }
 
 // NewSinkWorkerPool creates a new SinkWorkerPool
-func NewSinkWorkerPool(executor NodeExecutor, mode WorkerMode) NodeWorker {
+func NewSinkWorkerPool(executor nodeExecutor, mode WorkerMode) NodeWorker {
 
 	cnw := newConcreteNodeWorker(executor, mode)
 	swp := &SinkWorkerPool{ConcreteNodeWorker: cnw}
@@ -24,16 +24,17 @@ func NewSinkWorkerPool(executor NodeExecutor, mode WorkerMode) NodeWorker {
 
 // CreateChannels creates channels for the sink worker
 func (swp *SinkWorkerPool) CreateChannels(buffer int) {
-	swp.inputChannel = make(chan map[string]interface{}, buffer)
+	swp.inputChannel = make(chan any, buffer)
 }
 
 // Start Sink Worker Pool
 func (swp *SinkWorkerPool) Start(ctx CnvContext) error {
-	if swp.Mode == WorkerModeTransaction {
+	switch swp.Mode {
+	case WorkerModeTransaction:
 		return swp.startTransactionMode(ctx)
-	} else if swp.Mode == WorkerModeLoop {
+	case WorkerModeLoop:
 		return swp.startLoopMode(ctx)
-	} else {
+	default:
 		return ErrInvalidWorkerMode
 	}
 }
@@ -70,11 +71,11 @@ workerLoop:
 			break
 		}
 
-		go func(data map[string]interface{}) {
+		go func(data any) {
 			defer swp.recovery(ctx, "SinkWorkerPool")
 			defer swp.sem.Release(1)
 			if ok {
-				_, err := swp.Executor.Execute(ctx, data)
+				_, err := swp.Executor.executeUntyped(ctx, data)
 				if err == ErrExecuteNotImplemented {
 					ctx.SendLog(0, fmt.Sprintf("Executor:[%s]", swp.Executor.GetUniqueIdentifier()), err)
 					log.Fatalf("Improper setup of Executor[%s], Execute() method is required", swp.Executor.GetUniqueIdentifier())
@@ -84,7 +85,6 @@ workerLoop:
 						swp.Name, swp.Executor.GetUniqueIdentifier()), err)
 				}
 			}
-			return
 		}(in)
 	}
 
@@ -92,23 +92,23 @@ workerLoop:
 }
 
 // GetOutputChannel returns the output channel of Sink WorkerPool
-func (swp *SinkWorkerPool) GetOutputChannel() (chan map[string]interface{}, error) {
+func (swp *SinkWorkerPool) GetOutputChannel() (chan any, error) {
 	return nil, ErrOutputChanDoesNotExist
 }
 
 // GetInputChannel returns the input channel of Sink WorkerPool
-func (swp *SinkWorkerPool) GetInputChannel() (chan map[string]interface{}, error) {
+func (swp *SinkWorkerPool) GetInputChannel() (chan any, error) {
 	return swp.inputChannel, nil
 }
 
 // SetInputChannel updates the input channel of Sink WorkerPool
-func (swp *SinkWorkerPool) SetInputChannel(inChan chan map[string]interface{}) error {
+func (swp *SinkWorkerPool) SetInputChannel(inChan chan any) error {
 	swp.inputChannel = inChan
 	return nil
 }
 
 // SetOutputChannel updates the output channel of Sink WorkerPool
-func (swp *SinkWorkerPool) SetOutputChannel(outChan chan map[string]interface{}) error {
+func (swp *SinkWorkerPool) SetOutputChannel(outChan chan any) error {
 	return ErrOutputChanDoesNotExist
 }
 

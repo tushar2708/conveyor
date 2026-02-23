@@ -113,4 +113,12 @@ fabric.properties
 # Ignore all local history of files
 .history
 
+
+# AI tools
+.claude
+
+# Brainstorming
+/docs/
+/etc/
+
 # End of https://www.gitignore.io/api/go,intellij,visualstudiocode

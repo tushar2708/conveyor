@@ -1,0 +1,30 @@
+repos:
+  - repo: local
+    hooks:
+      - id: check-build
+        name: Go build check
+        entry: make build
+        language: system
+        types: [go]
+        pass_filenames: false
+
+      - id: check-test-compile
+        name: Compile test code
+        entry: make check
+        language: system
+        types: [go]
+        pass_filenames: false
+
+      - id: golangci-lint
+        name: golangci-lint
+        entry: make lint
+        language: system
+        types: [go]
+        pass_filenames: false
+
+      - id: check-go-tests
+        name: Run Go unit tests
+        entry: make unit-test-coverage
+        language: system
+        types: [go]
+        pass_filenames: false

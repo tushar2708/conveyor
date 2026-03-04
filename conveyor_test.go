@@ -366,3 +366,167 @@ func TestTypeMismatch_ContainsTypeNames(t *testing.T) {
 	assert.Contains(t, err.Error(), "int")
 	assert.Contains(t, err.Error(), "string")
 }
+
+// ---------------------------------------------------------------------------
+// Must* wrapper tests
+// ---------------------------------------------------------------------------
+
+// TestMustAddSource_Success verifies that MustAddSource does not panic when
+// the source is added successfully.
+func TestMustAddSource_Success(t *testing.T) {
+	cnv, err := NewConveyor("test", 10)
+	require.NoError(t, err)
+	src := &intSource{ConcreteSourceExecutor: ConcreteSourceExecutor[int]{Name: "src"}}
+	require.NotPanics(t, func() {
+		MustAddSource[int](cnv, src, WorkerModeTransaction)
+	})
+}
+
+// TestMustAddOperation_Success verifies no panic on valid type chain.
+func TestMustAddOperation_Success(t *testing.T) {
+	cnv, err := NewConveyor("test", 10)
+	require.NoError(t, err)
+	src := &intSource{ConcreteSourceExecutor: ConcreteSourceExecutor[int]{Name: "src"}}
+	MustAddSource[int](cnv, src, WorkerModeTransaction)
+
+	op := &intToStringOp{ConcreteOperationExecutor: ConcreteOperationExecutor[int, string]{Name: "op"}}
+	require.NotPanics(t, func() {
+		MustAddOperation[int, string](cnv, op, WorkerModeTransaction)
+	})
+}
+
+// TestMustAddSink_Success verifies no panic on valid type chain.
+func TestMustAddSink_Success(t *testing.T) {
+	cnv, err := NewConveyor("test", 10)
+	require.NoError(t, err)
+	src := &intSource{ConcreteSourceExecutor: ConcreteSourceExecutor[int]{Name: "src"}}
+	MustAddSource[int](cnv, src, WorkerModeTransaction)
+
+	snk := &intSink{ConcreteSinkExecutor: ConcreteSinkExecutor[int]{Name: "snk"}}
+	require.NotPanics(t, func() {
+		MustAddSink[int](cnv, snk, WorkerModeTransaction)
+	})
+}
+
+// TestMustAddOperation_Panics_TypeMismatch verifies that MustAddOperation panics
+// when the input type does not match the previous node's output type.
+func TestMustAddOperation_Panics_TypeMismatch(t *testing.T) {
+	cnv, err := NewConveyor("test", 10)
+	require.NoError(t, err)
+	src := &intSource{ConcreteSourceExecutor: ConcreteSourceExecutor[int]{Name: "src"}}
+	MustAddSource[int](cnv, src, WorkerModeTransaction)
+
+	// Source outputs int, but operation expects string input — must panic.
+	op := &stringToStringOp{ConcreteOperationExecutor: ConcreteOperationExecutor[string, string]{Name: "op"}}
+	require.Panics(t, func() {
+		MustAddOperation[string, string](cnv, op, WorkerModeTransaction)
+	})
+}
+
+// TestMustAddSink_Panics_TypeMismatch verifies that MustAddSink panics on
+// type mismatch.
+func TestMustAddSink_Panics_TypeMismatch(t *testing.T) {
+	cnv, err := NewConveyor("test", 10)
+	require.NoError(t, err)
+	src := &intSource{ConcreteSourceExecutor: ConcreteSourceExecutor[int]{Name: "src"}}
+	MustAddSource[int](cnv, src, WorkerModeTransaction)
+
+	// Source outputs int, but sink expects string — must panic.
+	snk := &stringSink{ConcreteSinkExecutor: ConcreteSinkExecutor[string]{Name: "snk"}}
+	require.Panics(t, func() {
+		MustAddSink[string](cnv, snk, WorkerModeTransaction)
+	})
+}
+
+// TestMustAddJointAfterNode_Panics_TypeMismatch verifies that MustAddJointAfterNode
+// panics when the joint's input type does not match the last node's output type.
+func TestMustAddJointAfterNode_Panics_TypeMismatch(t *testing.T) {
+	cnv, err := NewConveyor("test", 10)
+	require.NoError(t, err)
+	src := &intSource{ConcreteSourceExecutor: ConcreteSourceExecutor[int]{Name: "src"}}
+	MustAddSource[int](cnv, src, WorkerModeTransaction)
+
+	// Source outputs int, but joint expects string — must panic.
+	joint, err := NewReplicateJoint[string]("joint", 2)
+	require.NoError(t, err)
+	require.Panics(t, func() {
+		MustAddJointAfterNode[string, string](cnv, joint)
+	})
+}
+
+// TestMustAddJointAfterNode_Panics_NoNodes verifies that MustAddJointAfterNode
+// panics when no nodes have been added yet.
+func TestMustAddJointAfterNode_Panics_NoNodes(t *testing.T) {
+	cnv, err := NewConveyor("test", 10)
+	require.NoError(t, err)
+	joint, err := NewReplicateJoint[int]("joint", 2)
+	require.NoError(t, err)
+	require.Panics(t, func() {
+		MustAddJointAfterNode[int, int](cnv, joint)
+	})
+}
+
+// TestMustAddSinkAfterJoint_Panics_TypeMismatch verifies that MustAddSinkAfterJoint
+// panics when the sink's input type does not match the joint's output type.
+func TestMustAddSinkAfterJoint_Panics_TypeMismatch(t *testing.T) {
+	cnv, err := NewConveyor("test", 10)
+	require.NoError(t, err)
+	src := &intSource{ConcreteSourceExecutor: ConcreteSourceExecutor[int]{Name: "src"}}
+	MustAddSource[int](cnv, src, WorkerModeTransaction)
+
+	joint, err := NewReplicateJoint[int]("joint", 2)
+	require.NoError(t, err)
+	MustAddJointAfterNode[int, int](cnv, joint)
+
+	// Joint outputs int, but sink expects string — must panic.
+	snk := &stringSink{ConcreteSinkExecutor: ConcreteSinkExecutor[string]{Name: "snk"}}
+	require.Panics(t, func() {
+		MustAddSinkAfterJoint[string](cnv, snk, WorkerModeTransaction)
+	})
+}
+
+// TestMustAddSinkAfterJoint_Panics_NoJoints verifies that MustAddSinkAfterJoint
+// panics when no joints have been added.
+func TestMustAddSinkAfterJoint_Panics_NoJoints(t *testing.T) {
+	cnv, err := NewConveyor("test", 10)
+	require.NoError(t, err)
+	snk := &intSink{ConcreteSinkExecutor: ConcreteSinkExecutor[int]{Name: "snk"}}
+	require.Panics(t, func() {
+		MustAddSinkAfterJoint[int](cnv, snk, WorkerModeTransaction)
+	})
+}
+
+// TestMustAddOperationAfterJoint_Panics_NoJoints verifies that
+// MustAddOperationAfterJoint panics when no joints have been added.
+func TestMustAddOperationAfterJoint_Panics_NoJoints(t *testing.T) {
+	cnv, err := NewConveyor("test", 10)
+	require.NoError(t, err)
+	op := &intToStringOp{ConcreteOperationExecutor: ConcreteOperationExecutor[int, string]{Name: "op"}}
+	require.Panics(t, func() {
+		MustAddOperationAfterJoint[int, string](cnv, op, WorkerModeTransaction)
+	})
+}
+
+// TestMustAddSource_PanicMessage verifies that the panic value from MustAddSource
+// contains the function name for easy debugging.
+func TestMustAddSource_PanicMessage(t *testing.T) {
+	// MustAddSource itself won't fail easily since it's the first node,
+	// but we can test MustAddOperation's panic message format as a proxy
+	// for the pattern used across all Must* functions.
+	cnv, err := NewConveyor("test", 10)
+	require.NoError(t, err)
+	src := &intSource{ConcreteSourceExecutor: ConcreteSourceExecutor[int]{Name: "src"}}
+	MustAddSource[int](cnv, src, WorkerModeTransaction)
+
+	op := &stringToStringOp{ConcreteOperationExecutor: ConcreteOperationExecutor[string, string]{Name: "op"}}
+
+	defer func() {
+		r := recover()
+		require.NotNil(t, r, "expected a panic")
+		msg, ok := r.(string)
+		require.True(t, ok, "panic value should be a string")
+		assert.Contains(t, msg, "MustAddOperation")
+		assert.Contains(t, msg, "type mismatch")
+	}()
+	MustAddOperation[string, string](cnv, op, WorkerModeTransaction)
+}

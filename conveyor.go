@@ -234,6 +234,15 @@ func AddSource[TOut any](cnv *Conveyor, exec SourceExecutor[TOut], mode WorkerMo
 	return nil
 }
 
+// MustAddSource is like AddSource but panics if the node cannot be added.
+// Use this when a type mismatch or misconfiguration is a programmer error
+// that should be caught immediately during pipeline construction.
+func MustAddSource[TOut any](cnv *Conveyor, exec SourceExecutor[TOut], mode WorkerMode) {
+	if err := AddSource[TOut](cnv, exec, mode); err != nil {
+		panic(fmt.Sprintf("MustAddSource: %v", err))
+	}
+}
+
 // AddOperation adds an operation node to the conveyor.
 // TIn must match the output type of the previously added node; a type mismatch
 // returns ErrTypeMismatch at construction time before any workers are started.
@@ -264,6 +273,13 @@ func AddOperation[TIn, TOut any](cnv *Conveyor, exec OperationExecutor[TIn, TOut
 	return nil
 }
 
+// MustAddOperation is like AddOperation but panics on error.
+func MustAddOperation[TIn, TOut any](cnv *Conveyor, exec OperationExecutor[TIn, TOut], mode WorkerMode) {
+	if err := AddOperation[TIn, TOut](cnv, exec, mode); err != nil {
+		panic(fmt.Sprintf("MustAddOperation: %v", err))
+	}
+}
+
 // AddSink adds a sink node to the conveyor.
 // TIn must match the output type of the previously added node; a type mismatch
 // returns ErrTypeMismatch at construction time before any workers are started.
@@ -292,6 +308,13 @@ func AddSink[TIn any](cnv *Conveyor, exec SinkExecutor[TIn], mode WorkerMode) er
 	cnv.lastNodeOutType = nil // sinks produce no output
 	cnv.lockConfig()
 	return nil
+}
+
+// MustAddSink is like AddSink but panics on error.
+func MustAddSink[TIn any](cnv *Conveyor, exec SinkExecutor[TIn], mode WorkerMode) {
+	if err := AddSink[TIn](cnv, exec, mode); err != nil {
+		panic(fmt.Sprintf("MustAddSink: %v", err))
+	}
 }
 
 // AddJointAfterNode adds a joint executor after the last node in the conveyor.
@@ -335,6 +358,13 @@ func AddJointAfterNode[TIn, TOut any](cnv *Conveyor, exec JointExecutor[TIn, TOu
 	cnv.lastJointOutType = reflect.TypeFor[TOut]()
 	cnv.lockConfig()
 	return nil
+}
+
+// MustAddJointAfterNode is like AddJointAfterNode but panics on error.
+func MustAddJointAfterNode[TIn, TOut any](cnv *Conveyor, exec JointExecutor[TIn, TOut]) {
+	if err := AddJointAfterNode[TIn, TOut](cnv, exec); err != nil {
+		panic(fmt.Sprintf("MustAddJointAfterNode: %v", err))
+	}
 }
 
 // AddSinkAfterJoint adds a sink node after the last joint in the conveyor.
@@ -382,6 +412,13 @@ func AddSinkAfterJoint[TIn any](cnv *Conveyor, exec SinkExecutor[TIn], mode Work
 	return nil
 }
 
+// MustAddSinkAfterJoint is like AddSinkAfterJoint but panics on error.
+func MustAddSinkAfterJoint[TIn any](cnv *Conveyor, exec SinkExecutor[TIn], mode WorkerMode) {
+	if err := AddSinkAfterJoint[TIn](cnv, exec, mode); err != nil {
+		panic(fmt.Sprintf("MustAddSinkAfterJoint: %v", err))
+	}
+}
+
 // AddOperationAfterJoint adds an operation node after the last joint in the conveyor.
 // TIn must match the output type of the last joint added via AddJointAfterNode;
 // a mismatch returns ErrTypeMismatch. ErrNoJointsAvailable is returned when no
@@ -427,6 +464,13 @@ func AddOperationAfterJoint[TIn, TOut any](cnv *Conveyor, exec OperationExecutor
 	cnv.lastNodeOutType = reflect.TypeFor[TOut]()
 	cnv.lockConfig()
 	return nil
+}
+
+// MustAddOperationAfterJoint is like AddOperationAfterJoint but panics on error.
+func MustAddOperationAfterJoint[TIn, TOut any](cnv *Conveyor, exec OperationExecutor[TIn, TOut], mode WorkerMode) {
+	if err := AddOperationAfterJoint[TIn, TOut](cnv, exec, mode); err != nil {
+		panic(fmt.Sprintf("MustAddOperationAfterJoint: %v", err))
+	}
 }
 
 // AddNodeWorker employs a new worker station to the conveyor

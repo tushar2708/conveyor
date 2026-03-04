@@ -35,13 +35,14 @@ func main() {
 
 	}
 
-	if exampleToRun == 1 {
+	switch exampleToRun {
+	case 1:
 		testConveyor, cnvErr = squaringNumbers.PrepareLoopingConveyor(basicConveyor)
-	} else if exampleToRun == 2 {
+	case 2:
 		testConveyor, cnvErr = squaringNumbers.PrepareTransactionalConveyor(basicConveyor)
-	} else if exampleToRun == 3 {
+	case 3:
 		testConveyor, cnvErr = squaringNumbers.PrepareComplexTransactionalConveyor(basicConveyor)
-	} else {
+	default:
 		fmt.Println(`Example number is invalid.
 		Usage: go run main.go <example number (1, 2, or 3)>
 		1: Simple conveyor with loop mode

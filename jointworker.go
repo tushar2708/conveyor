@@ -8,13 +8,12 @@ import (
 // JointWorkerPool struct provides the worker pool infra for Joint interface, that act as connections between nodes
 type JointWorkerPool struct {
 	*ConcreteJointWorker
-	nextWorkerCount int
-	inputChannels   []chan map[string]interface{}
-	outputChannels  []chan map[string]interface{}
+	inputChannels  []chan any
+	outputChannels []chan any
 }
 
 // NewJointWorkerPool creates a new OperationWorkerPool
-func NewJointWorkerPool(executor JointExecutor) JointWorker {
+func NewJointWorkerPool(executor jointExecutor) JointWorker {
 	jwp := &JointWorkerPool{
 		ConcreteJointWorker: &ConcreteJointWorker{
 			WPool: &WPool{
@@ -30,40 +29,40 @@ func NewJointWorkerPool(executor JointExecutor) JointWorker {
 // CreateChannels creates channels for the joint worker
 func (jwp *JointWorkerPool) CreateChannels(buffer int) {
 	for i := 0; i < jwp.Executor.InputCount(); i++ {
-		jwp.inputChannels = append(jwp.inputChannels, make(chan map[string]interface{}, buffer))
+		jwp.inputChannels = append(jwp.inputChannels, make(chan any, buffer))
 	}
 }
 
 // GetInputChannels returns the input channel of Joint WorkerPool
-func (jwp *JointWorkerPool) GetInputChannels() ([]chan map[string]interface{}, error) {
+func (jwp *JointWorkerPool) GetInputChannels() ([]chan any, error) {
 	return jwp.inputChannels, nil
 }
 
 // GetOutputChannels returns the output channel of Joint WorkerPool
-func (jwp *JointWorkerPool) GetOutputChannels() ([]chan map[string]interface{}, error) {
+func (jwp *JointWorkerPool) GetOutputChannels() ([]chan any, error) {
 	return jwp.outputChannels, nil
 }
 
 // SetInputChannels updates the input channel of Joint WorkerPool
-func (jwp *JointWorkerPool) SetInputChannels(inChans []chan map[string]interface{}) error {
+func (jwp *JointWorkerPool) SetInputChannels(inChans []chan any) error {
 	jwp.inputChannels = inChans
 	return nil
 }
 
 // SetOutputChannels updates the output channel of Joint WorkerPool
-func (jwp *JointWorkerPool) SetOutputChannels(outChans []chan map[string]interface{}) error {
+func (jwp *JointWorkerPool) SetOutputChannels(outChans []chan any) error {
 	jwp.outputChannels = outChans
 	return nil
 }
 
 // AddInputChannel maps a slice of channels on the join't outupt channels
-func (jwp *JointWorkerPool) AddInputChannel(inChan chan map[string]interface{}) error {
+func (jwp *JointWorkerPool) AddInputChannel(inChan chan any) error {
 	jwp.outputChannels = append(jwp.outputChannels, inChan)
 	return nil
 }
 
 // AddOutputChannel maps a slice of channels on the join't outupt channels
-func (jwp *JointWorkerPool) AddOutputChannel(outChan chan map[string]interface{}) error {
+func (jwp *JointWorkerPool) AddOutputChannel(outChan chan any) error {
 	jwp.outputChannels = append(jwp.outputChannels, outChan)
 	return nil
 }
@@ -74,7 +73,7 @@ func (jwp *JointWorkerPool) Start(ctx CnvContext) error {
 		jwp.Wg.Add(1)
 		go func() {
 			defer jwp.Wg.Done()
-			if err := jwp.Executor.ExecuteLoop(ctx, jwp.inputChannels, jwp.outputChannels); err != nil {
+			if err := jwp.Executor.executeLoopUntyped(ctx, jwp.inputChannels, jwp.outputChannels); err != nil {
 				ctx.SendLog(0, fmt.Sprintf("Executor:[%s]", jwp.Executor.GetUniqueIdentifier()), err)
 				log.Fatalf("Improper setup of Executor[%s], ExecuteLoop() method is required", jwp.Executor.GetUniqueIdentifier())
 				return

@@ -11,12 +11,11 @@ import (
 // SourceWorkerPool struct provides the worker pool infra for Source interface
 type SourceWorkerPool struct {
 	*ConcreteNodeWorker
-	nextWorkerCount int
-	outputChannel   chan map[string]interface{}
+	outputChannel chan any
 }
 
 // NewSourceWorkerPool creates a new SourceWorkerPool
-func NewSourceWorkerPool(executor NodeExecutor, mode WorkerMode) NodeWorker {
+func NewSourceWorkerPool(executor nodeExecutor, mode WorkerMode) NodeWorker {
 
 	cnw := newConcreteNodeWorker(executor, mode)
 	swp := &SourceWorkerPool{ConcreteNodeWorker: cnw}
@@ -25,33 +24,34 @@ func NewSourceWorkerPool(executor NodeExecutor, mode WorkerMode) NodeWorker {
 }
 
 // GetOutputChannel returns the output channel of Source WorkerPool
-func (swp *SourceWorkerPool) GetOutputChannel() (chan map[string]interface{}, error) {
+func (swp *SourceWorkerPool) GetOutputChannel() (chan any, error) {
 	return swp.outputChannel, nil
 }
 
 // GetInputChannel returns the input channel of Source WorkerPool
-func (swp *SourceWorkerPool) GetInputChannel() (chan map[string]interface{}, error) {
+func (swp *SourceWorkerPool) GetInputChannel() (chan any, error) {
 	return nil, ErrInputChanDoesNotExist
 }
 
 // SetInputChannel updates the input channel of Source WorkerPool
-func (swp *SourceWorkerPool) SetInputChannel(inChan chan map[string]interface{}) error {
+func (swp *SourceWorkerPool) SetInputChannel(inChan chan any) error {
 	return ErrInputChanDoesNotExist
 }
 
 // SetOutputChannel updates the output channel of Source WorkerPool
-func (swp *SourceWorkerPool) SetOutputChannel(outChan chan map[string]interface{}) error {
+func (swp *SourceWorkerPool) SetOutputChannel(outChan chan any) error {
 	swp.outputChannel = outChan
 	return nil
 }
 
 // Start Source Worker Pool
 func (swp *SourceWorkerPool) Start(ctx CnvContext) error {
-	if swp.Mode == WorkerModeTransaction {
+	switch swp.Mode {
+	case WorkerModeTransaction:
 		return swp.startTransactionMode(ctx)
-	} else if swp.Mode == WorkerModeLoop {
+	case WorkerModeLoop:
 		return swp.startLoopMode(ctx)
-	} else {
+	default:
 		return ErrInvalidWorkerMode
 	}
 }
@@ -75,7 +75,7 @@ workerLoop:
 	for {
 
 		doneMutex.RLock()
-		if workerDone == true {
+		if workerDone {
 			doneMutex.RUnlock()
 			break workerLoop
 		}
@@ -95,31 +95,29 @@ workerLoop:
 		go func() {
 			defer swp.recovery(ctx, "SourceWorkerPool")
 			defer swp.sem.Release(1)
-			outData, err := swp.Executor.Execute(ctx, nil)
-			if err == nil {
+			outData, err := swp.Executor.executeUntyped(ctx, nil)
+			switch err {
+			case nil:
 				select {
 				case <-ctx.Done():
 					return
 				default:
 				}
 				swp.outputChannel <- outData
-			} else if err == ErrExecuteNotImplemented {
+			case ErrExecuteNotImplemented:
 				ctx.SendLog(0, fmt.Sprintf("Executor:[%s]", swp.Executor.GetUniqueIdentifier()), err)
 				log.Fatalf("Improper setup of Executor[%s], Execute() method is required",
 					swp.Executor.GetUniqueIdentifier())
-			} else if err == ErrSourceExhausted {
+			case ErrSourceExhausted:
 				ctx.SendLog(0, fmt.Sprintf("Executor:[%s]", swp.Executor.GetUniqueIdentifier()), err)
 				doneMutex.Lock()
 				workerDone = true
 				doneMutex.Unlock()
-				ctx.Cancel()
 				return
-			} else {
+			default:
 				ctx.SendLog(2, fmt.Sprintf("Worker:[%s] for Executor:[%s] Execute() Call Failed.",
 					swp.Name, swp.Executor.GetUniqueIdentifier()), err)
 			}
-
-			return
 		}()
 
 	}

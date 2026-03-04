@@ -10,9 +10,8 @@ import (
 // OperationWorkerPool struct provides the worker pool infra for Operation interface
 type OperationWorkerPool struct {
 	*ConcreteNodeWorker
-	nextWorkerCount int
-	inputChannel    chan map[string]interface{}
-	outputChannel   chan map[string]interface{}
+	inputChannel  chan any
+	outputChannel chan any
 }
 
 // OperationNode structue
@@ -21,7 +20,7 @@ type OperationNode struct {
 }
 
 // NewOperationWorkerPool creates a new OperationWorkerPool
-func NewOperationWorkerPool(executor NodeExecutor, mode WorkerMode) NodeWorker {
+func NewOperationWorkerPool(executor nodeExecutor, mode WorkerMode) NodeWorker {
 
 	cnw := newConcreteNodeWorker(executor, mode)
 	fwp := &OperationWorkerPool{ConcreteNodeWorker: cnw}
@@ -31,38 +30,39 @@ func NewOperationWorkerPool(executor NodeExecutor, mode WorkerMode) NodeWorker {
 
 // CreateChannels creates channels for the Operation WorkerPool
 func (fwp *OperationWorkerPool) CreateChannels(buffer int) {
-	fwp.inputChannel = make(chan map[string]interface{}, buffer)
+	fwp.inputChannel = make(chan any, buffer)
 }
 
 // GetInputChannel returns the input channel of Operation WorkerPool
-func (fwp *OperationWorkerPool) GetInputChannel() (chan map[string]interface{}, error) {
+func (fwp *OperationWorkerPool) GetInputChannel() (chan any, error) {
 	return fwp.inputChannel, nil
 }
 
 // GetOutputChannel returns the output channel of Operation WorkerPool
-func (fwp *OperationWorkerPool) GetOutputChannel() (chan map[string]interface{}, error) {
+func (fwp *OperationWorkerPool) GetOutputChannel() (chan any, error) {
 	return fwp.outputChannel, nil
 }
 
 // SetInputChannel updates the input channel of Operation WorkerPool
-func (fwp *OperationWorkerPool) SetInputChannel(inChan chan map[string]interface{}) error {
+func (fwp *OperationWorkerPool) SetInputChannel(inChan chan any) error {
 	fwp.inputChannel = inChan
 	return nil
 }
 
 // SetOutputChannel updates the output channel of Operation WorkerPool
-func (fwp *OperationWorkerPool) SetOutputChannel(outChan chan map[string]interface{}) error {
+func (fwp *OperationWorkerPool) SetOutputChannel(outChan chan any) error {
 	fwp.outputChannel = outChan
 	return nil
 }
 
 // Start Operation Worker Pool
 func (fwp *OperationWorkerPool) Start(ctx CnvContext) error {
-	if fwp.Mode == WorkerModeTransaction {
+	switch fwp.Mode {
+	case WorkerModeTransaction:
 		return fwp.startTransactionMode(ctx)
-	} else if fwp.Mode == WorkerModeLoop {
+	case WorkerModeLoop:
 		return fwp.startLoopMode(ctx)
-	} else {
+	default:
 		return ErrInvalidWorkerMode
 	}
 }
@@ -99,27 +99,26 @@ workerLoop:
 			break workerLoop
 		}
 
-		go func(data map[string]interface{}) {
+		go func(data any) {
 			defer fwp.recovery(ctx, "OperationWorkerPool")
 			defer fwp.sem.Release(1)
 
-			out, err := fwp.Executor.Execute(ctx, data)
-			if err == nil {
+			out, err := fwp.Executor.executeUntyped(ctx, data)
+			switch err {
+			case nil:
 				select {
 				case <-ctx.Done():
 					return
 				default:
 				}
 				fwp.outputChannel <- out
-			} else if err == ErrExecuteNotImplemented {
+			case ErrExecuteNotImplemented:
 				ctx.SendLog(0, fmt.Sprintf("Executor:[%s]", fwp.Executor.GetUniqueIdentifier()), err)
 				log.Fatalf("Improper setup of Executor[%s], Execute() method is required", fwp.Executor.GetUniqueIdentifier())
-			} else {
+			default:
 				ctx.SendLog(2, fmt.Sprintf("Worker:[%s] for Executor:[%s] Execute() Call Failed.",
 					fwp.Name, fwp.Executor.GetUniqueIdentifier()), err)
 			}
-
-			return
 		}(inData)
 
 	}

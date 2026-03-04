@@ -1,8 +1,17 @@
 module github.com/tushar2708/conveyor
 
-go 1.13
+go 1.22.0
+
+toolchain go1.24.0
 
 require (
 	github.com/satori/go.uuid v1.2.0
-	golang.org/x/sync v0.0.0-20181108010431-42b317875d0f
+	github.com/stretchr/testify v1.10.0
+	golang.org/x/sync v0.11.0
+)
+
+require (
+	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

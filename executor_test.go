@@ -12,7 +12,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Test helpers — concrete executor implementations
+// Test helpers - concrete executor implementations
 // ---------------------------------------------------------------------------
 
 // testSource is a minimal SourceExecutor[int] for testing the sourceWrapper.
@@ -97,7 +97,7 @@ func TestSourceWrapper_Types(t *testing.T) {
 	}
 	w := wrapSource[int](src)
 
-	assert.Nil(t, w.InType(), "source InType must be nil — sources have no input")
+	assert.Nil(t, w.InType(), "source InType must be nil - sources have no input")
 	assert.Equal(t, reflect.TypeFor[int](), w.OutType())
 	assert.Equal(t, WorkerTypeSource, w.WorkerType())
 	assert.Equal(t, "src", w.GetName())
@@ -122,7 +122,7 @@ func TestSinkWrapper_Types(t *testing.T) {
 	w := wrapSink[string](snk)
 
 	assert.Equal(t, reflect.TypeFor[string](), w.InType())
-	assert.Nil(t, w.OutType(), "sink OutType must be nil — sinks produce no output")
+	assert.Nil(t, w.OutType(), "sink OutType must be nil - sinks produce no output")
 	assert.Equal(t, WorkerTypeSink, w.WorkerType())
 }
 

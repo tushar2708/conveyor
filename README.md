@@ -8,10 +8,12 @@
 [![Maintainability](https://api.codeclimate.com/v1/badges/e6c8164f8cbf98490fe8/maintainability)](https://codeclimate.com/github/tushar2708/conveyor/maintainability)
 [![Test Coverage](https://api.codeclimate.com/v1/badges/e6c8164f8cbf98490fe8/test_coverage)](https://codeclimate.com/github/tushar2708/conveyor/test_coverage)
 
-A go pipeline management library, supporting concurrent pipelines, with multiple nodes and joints.
+A type-safe Go pipeline library using generics, supporting concurrent pipelines with compile-time type validation between nodes and joints.
 
-**TL;DR:** 
-A pipeline is a standard concurrency pattern in Go, at least in terms of use case & functionality. And there are multiple ways people create them based on their specific requirements. This project is my attempt to create a generic one that can be used in most, if not all use-cases. If you are already aware of what a pipeline is, you can move on to [examples.](https://github.com/tushar2708/conveyor/tree/master/examples "Conveyor Examples") or [Implementation](https://github.com/tushar2708/conveyor#how-to-implement-your-own-nodes) section. 
+> **Breaking Change (v1.1.0):** The API now uses Go generics for compile-time type safety. The old `map[string]interface{}`-based `NodeExecutor` and `JointExecutor` interfaces have been replaced by typed generic equivalents (`SourceExecutor[T]`, `OperationExecutor[TIn, TOut]`, `SinkExecutor[T]`, `JointExecutor[TIn, TOut]`). See [GENERIC_MIGRATION.md](GENERIC_MIGRATION.md) for a detailed migration guide.
+
+**TL;DR:**
+A pipeline is a standard concurrency pattern in Go, at least in terms of use case & functionality. And there are multiple ways people create them based on their specific requirements. This project is my attempt to create a generic one that can be used in most, if not all use-cases. If you are already aware of what a pipeline is, you can move on to [examples.](https://github.com/tushar2708/conveyor/tree/master/examples "Conveyor Examples") or [Implementation](https://github.com/tushar2708/conveyor#how-to-implement-your-own-nodes) section.
 
 You can also read more about pipelines from [here](https://blog.golang.org/pipelines "Go Pipelines")
 
@@ -45,29 +47,51 @@ which replicates same data to be sent to multiple nodes at next stage. More will
 
 ## How to implement your own nodes and joints?
 
-There are these 2 interfaces that you need to implement in your own types, for Nodes & Joints, respectively:
+There are 4 generic interfaces, one for each role in the pipeline:
 
 ```go
-// NodeExecutor interface is the interface that you need to implement by your own types of nodes
-type NodeExecutor interface {
+// SourceExecutor produces values of type TOut
+type SourceExecutor[TOut any] interface {
 	GetName() string
 	GetUniqueIdentifier() string
-	ExecuteLoop(ctx CnvContext, inChan <-chan map[string]interface{}, outChan chan<- map[string]interface{}) error
-	Execute(ctx CnvContext, inData map[string]interface{}) (map[string]interface{}, error)
+	Execute(ctx CnvContext) (TOut, error)
+	ExecuteLoop(ctx CnvContext, outChan chan<- TOut) error
 	Count() int
 	CleanUp() error
 }
 
-// JointExecutor interface is the interface that you need to implement by your own types of joints
-type JointExecutor interface {
+// OperationExecutor transforms TIn into TOut
+type OperationExecutor[TIn, TOut any] interface {
 	GetName() string
 	GetUniqueIdentifier() string
-	ExecuteLoop(ctx CnvContext, inChan []chan map[string]interface{}, outChan []chan map[string]interface{}) error
+	Execute(ctx CnvContext, inData TIn) (TOut, error)
+	ExecuteLoop(ctx CnvContext, inChan <-chan TIn, outChan chan<- TOut) error
+	Count() int
+	CleanUp() error
+}
+
+// SinkExecutor consumes values of type TIn
+type SinkExecutor[TIn any] interface {
+	GetName() string
+	GetUniqueIdentifier() string
+	Execute(ctx CnvContext, inData TIn) error
+	ExecuteLoop(ctx CnvContext, inChan <-chan TIn) error
+	Count() int
+	CleanUp() error
+}
+
+// JointExecutor connects multiple input channels to multiple output channels
+type JointExecutor[TIn, TOut any] interface {
+	GetName() string
+	GetUniqueIdentifier() string
+	ExecuteLoop(ctx CnvContext, inChans []chan TIn, outChans []chan TOut) error
 	Count() int
 	InputCount() int
 	OutputCount() int
 }
 ```
+
+Types are validated at construction time: if you add an `OperationExecutor[string, int]` after a `SourceExecutor[int]`, you get a compile-time type mismatch. If the type parameters are correct but the pipeline structure is wrong (e.g., adding a sink when no nodes exist), you get a clear runtime error at construction time, before the pipeline starts.
 
 * `GetName()` returns a string to represent the name of the executor.
 
@@ -75,48 +99,85 @@ type JointExecutor interface {
 
 * `Count()` decides the concurrency you want to have for your node.
 
-* `CleanUp()` is called once node's job is completed. To do any cleanup activity 
+* `CleanUp()` is called once node's job is completed. To do any cleanup activity
 (like closing a file/database connection, or to wait till your other go-routines finish)
 
 
-If you don't want to implement all of these methods, it makes sense. 
-There's a struct `conveyor.ConcreteNodeExecutor` that you can extend, which gives default implementations of these 4 methods.
-You can get up and running without overriding them, but for an actual application, 
-where hopefully, you will need concurrency, don't forget to return "something > 1: from `Count()`.
-it's default value is 1. Also, always `Cleanup()` after yourself.  
- 
- But, you must implement one of the below 2 methods, based on what you want your node to do.
- Their default implementation just returns `ErrExecuteNotImplemented` error.
+If you don't want to implement all of these methods, there are concrete base structs you can embed, one for each role:
 
-* **Execute()** receives a `map[string]interface{}` (inData) as input, and returns a `map[string]interface{}` as output.
-This is the method that you must implement based on what you want your node to do. This is the method gets called, 
-if you have added your node to work in "Transaction Mode" (check example for more on that). In most cases, you can just
-get the most out of this method. Here we create a new Go-routine for each request, and number of go-routines running 
-at a given time, is decided by `Count()`. If your Execute() for source node returns an error `ErrSourceExhausted`, 
-conveyor will assume that it's time to finish up, and will stop reading any more data, 
-and will gracefully shutdown after processing already read data. Generally, if any node returns a non-nil error, 
-that particular unit of data would be dropped, and won't be sent to the next node.
+* `ConcreteSourceExecutor[TOut]` - base struct for source nodes
+* `ConcreteOperationExecutor[TIn, TOut]` - base struct for operation nodes
+* `ConcreteSinkExecutor[TIn]` - base struct for sink nodes
+* `ConcreteJointExecutor[TIn, TOut]` - base struct for joint nodes
 
-* **ExecuteLoop()** gets called if your Executor has been added to work in "Loop Mode". 
-It receives 2 channels (inChan & outChan) having `map[string]interface{}`.
-You will be needed to run a for loop, to read inputs from `inChan`, and write it to `outChan`
-It is supposed to be a blocking function, but the loop should exit once you are done. 
-If there are 10 instances of this function running, and all of them return, 
-Conveyor will take that as a signal to shutdown, the node, and the ones that come next to it.
-As a rule of thumb, always let your source dictate when to finish up, all other will automatically follow it's lead.
+Each provides default implementations of `GetName`, `GetUniqueIdentifier`, `Count` (returns 1), and `CleanUp`.
+For an actual application where you need concurrency, override `Count()` to return something greater than 1.
+
+You must implement one of the below 2 methods, based on what you want your node to do.
+Their default implementation just returns `ErrExecuteNotImplemented` error.
+
+* **Execute()** is the single-item processing method. For a source, it takes no input and returns `TOut`. For an operation, it takes `TIn` and returns `TOut`. For a sink, it takes `TIn` and returns only an error.
+This method gets called if you have added your node to work in "Transaction Mode" (check example for more on that). In most cases, you can just get the most out of this method. Here we create a new Go-routine for each request, and number of go-routines running at a given time, is decided by `Count()`. If your `Execute()` for a source node returns an error `ErrSourceExhausted`, conveyor will assume that it's time to finish up, and will stop reading any more data, and will gracefully shutdown after processing already read data. Generally, if any node returns a non-nil error, that particular unit of data would be dropped, and won't be sent to the next node.
+
+* **ExecuteLoop()** gets called if your Executor has been added to work in "Loop Mode".
+For a source, it receives only `outChan chan<- TOut`. For an operation, it receives `inChan <-chan TIn` and `outChan chan<- TOut`. For a sink, it receives only `inChan <-chan TIn`.
+You will need to run a for loop, to read inputs from `inChan` (if applicable), and write to `outChan` (if applicable).
+It is supposed to be a blocking function, but the loop should exit once you are done.
+If there are 10 instances of this function running, and all of them return,
+Conveyor will take that as a signal to shutdown the node, and the ones that come next to it.
+As a rule of thumb, always let your source dictate when to finish up, all others will automatically follow its lead.
+
+### Building a Pipeline
+
+Use the top-level generic functions to add nodes to a conveyor. Types are checked at construction time:
+
+```go
+cnv, _ := conveyor.NewConveyor("my-pipeline", 10)
+
+// Source produces int values
+conveyor.AddSource[int](cnv, mySource, conveyor.WorkerModeLoop)
+
+// Operation takes int, produces int - type must match the source's output
+conveyor.AddOperation[int, int](cnv, mySquarer, conveyor.WorkerModeTransaction)
+
+// Sink consumes int - type must match the operation's output
+conveyor.AddSink[int](cnv, myPrinter, conveyor.WorkerModeTransaction)
+
+cnv.Start()
+```
+
+Each `Add*` function returns an error if the types don't match or the pipeline structure is invalid.
+For cases where a type mismatch is a programmer error, use the `Must*` variants that panic instead:
+
+```go
+conveyor.MustAddSource[int](cnv, mySource, conveyor.WorkerModeLoop)
+conveyor.MustAddOperation[int, int](cnv, mySquarer, conveyor.WorkerModeTransaction)
+conveyor.MustAddSink[int](cnv, myPrinter, conveyor.WorkerModeTransaction)
+```
+
+For pipelines with branching (joints), use `AddJointAfterNode`, `AddSinkAfterJoint`, and `AddOperationAfterJoint`:
+
+```go
+joint, _ := conveyor.NewReplicateJoint[int]("replicator", 3)
+conveyor.AddJointAfterNode[int, int](cnv, joint)
+
+conveyor.AddSinkAfterJoint[int](cnv, sink1, conveyor.WorkerModeTransaction)
+conveyor.AddSinkAfterJoint[int](cnv, sink2, conveyor.WorkerModeTransaction)
+conveyor.AddSinkAfterJoint[int](cnv, sink3, conveyor.WorkerModeTransaction)
+```
 
 ### Why did I go for the approach of "Implementing an interface", and not "Writing a function" for each node, like the one mentioned [here](https://blog.golang.org/pipelines) ?
 A function is what I had started with, but soon realised that if I am going to do anything flexible, I need something
-more than a single function. For example, I might want to run a SQL query while creating a node, and fetch the results inside the source node, before starting the conveyor machinery (say, inside a `func New MySQLSource()`), 
+more than a single function. For example, I might want to run a SQL query while creating a node, and fetch the results inside the source node, before starting the conveyor machinery (say, inside a `func New MySQLSource()`),
 and then with each call of `Execute()`, I would just return the next entry.
 Or if I am using `ExecuteLoop()` I can just keep writing to the output channel inside a for loop.
 
 I couldn't do it elegantly using just a function. Also the `Count()` lets each node decide,
- how many concurrent go-routines should run for it. Which brings us to the next important gotcha- Always keep your `Execute()` & `ExecuteLoop()` methods **race-free**. 
- Don't modify any of the receiver struct's parameters, inside these 2 functions. 
+ how many concurrent go-routines should run for it. Which brings us to the next important gotcha- Always keep your `Execute()` & `ExecuteLoop()` methods **race-free**.
+ Don't modify any of the receiver struct's parameters, inside these 2 functions.
  Just work with the incoming data, and stream the output to the next channel(s)
- If your read operation(for source), isn't race-free (eg. reading from a file), 
- consider using a single go-routine for source, and more for heavy lifting in later nodes. 
+ If your read operation(for source), isn't race-free (eg. reading from a file),
+ consider using a single go-routine for source, and more for heavy lifting in later nodes.
 
 ## Monitoring, Logging, Progress tracking, and Timeout/Killing.
 

@@ -101,7 +101,7 @@ func TestAddOperation_TypeMismatch(t *testing.T) {
 	src := &intSource{ConcreteSourceExecutor: ConcreteSourceExecutor[int]{Name: "src"}}
 	require.NoError(t, AddSource[int](cnv, src, WorkerModeTransaction))
 
-	// Source outputs int but the operation expects string — must fail.
+	// Source outputs int but the operation expects string - must fail.
 	op := &stringToStringOp{ConcreteOperationExecutor: ConcreteOperationExecutor[string, string]{Name: "op"}}
 	err := AddOperation[string, string](cnv, op, WorkerModeTransaction)
 	assert.Error(t, err)
@@ -127,7 +127,7 @@ func TestAddSink_TypeMismatch(t *testing.T) {
 	src := &intSource{ConcreteSourceExecutor: ConcreteSourceExecutor[int]{Name: "src"}}
 	require.NoError(t, AddSource[int](cnv, src, WorkerModeTransaction))
 
-	// Source outputs int but the sink expects string — must fail.
+	// Source outputs int but the sink expects string - must fail.
 	snk := &stringSink{ConcreteSinkExecutor: ConcreteSinkExecutor[string]{Name: "snk"}}
 	err := AddSink[string](cnv, snk, WorkerModeTransaction)
 	assert.Error(t, err)
@@ -154,7 +154,7 @@ func TestAddSink_ClearsLastNodeOutType(t *testing.T) {
 func TestChainedTypes_Success(t *testing.T) {
 	cnv, _ := NewConveyor("test", 10)
 
-	// int → string → float64 — all adjacent types must agree.
+	// int → string → float64 - all adjacent types must agree.
 	src := &intSource{ConcreteSourceExecutor: ConcreteSourceExecutor[int]{Name: "src"}}
 	require.NoError(t, AddSource[int](cnv, src, WorkerModeTransaction))
 
@@ -179,7 +179,7 @@ func TestChainedTypes_MismatchInMiddle(t *testing.T) {
 	op1 := &intToStringOp{ConcreteOperationExecutor: ConcreteOperationExecutor[int, string]{Name: "op1"}}
 	require.NoError(t, AddOperation[int, string](cnv, op1, WorkerModeTransaction))
 
-	// op1 emits string but floatSink expects float64 — must fail.
+	// op1 emits string but floatSink expects float64 - must fail.
 	snk := &floatSink{ConcreteSinkExecutor: ConcreteSinkExecutor[float64]{Name: "snk"}}
 	err := AddSink[float64](cnv, snk, WorkerModeTransaction)
 	assert.True(t, errors.Is(err, ErrTypeMismatch))
@@ -206,7 +206,7 @@ func TestAddJointAfterNode_TypeMismatch(t *testing.T) {
 	src := &intSource{ConcreteSourceExecutor: ConcreteSourceExecutor[int]{Name: "src"}}
 	require.NoError(t, AddSource[int](cnv, src, WorkerModeTransaction))
 
-	// Source outputs int but the joint expects string input — must fail.
+	// Source outputs int but the joint expects string input - must fail.
 	joint, _ := NewReplicateJoint[string]("joint", 2)
 	err := AddJointAfterNode[string, string](cnv, joint)
 	assert.True(t, errors.Is(err, ErrTypeMismatch))
@@ -258,7 +258,7 @@ func TestAddSinkAfterJoint_TypeMismatch(t *testing.T) {
 	joint, _ := NewReplicateJoint[int]("joint", 2)
 	require.NoError(t, AddJointAfterNode[int, int](cnv, joint))
 
-	// Joint outputs int but the sink expects string — must fail.
+	// Joint outputs int but the sink expects string - must fail.
 	snk := &stringSink{ConcreteSinkExecutor: ConcreteSinkExecutor[string]{Name: "snk"}}
 	err := AddSinkAfterJoint[string](cnv, snk, WorkerModeTransaction)
 	assert.True(t, errors.Is(err, ErrTypeMismatch))
@@ -416,7 +416,7 @@ func TestMustAddOperation_Panics_TypeMismatch(t *testing.T) {
 	src := &intSource{ConcreteSourceExecutor: ConcreteSourceExecutor[int]{Name: "src"}}
 	MustAddSource[int](cnv, src, WorkerModeTransaction)
 
-	// Source outputs int, but operation expects string input — must panic.
+	// Source outputs int, but operation expects string input - must panic.
 	op := &stringToStringOp{ConcreteOperationExecutor: ConcreteOperationExecutor[string, string]{Name: "op"}}
 	require.Panics(t, func() {
 		MustAddOperation[string, string](cnv, op, WorkerModeTransaction)
@@ -431,7 +431,7 @@ func TestMustAddSink_Panics_TypeMismatch(t *testing.T) {
 	src := &intSource{ConcreteSourceExecutor: ConcreteSourceExecutor[int]{Name: "src"}}
 	MustAddSource[int](cnv, src, WorkerModeTransaction)
 
-	// Source outputs int, but sink expects string — must panic.
+	// Source outputs int, but sink expects string - must panic.
 	snk := &stringSink{ConcreteSinkExecutor: ConcreteSinkExecutor[string]{Name: "snk"}}
 	require.Panics(t, func() {
 		MustAddSink[string](cnv, snk, WorkerModeTransaction)
@@ -446,7 +446,7 @@ func TestMustAddJointAfterNode_Panics_TypeMismatch(t *testing.T) {
 	src := &intSource{ConcreteSourceExecutor: ConcreteSourceExecutor[int]{Name: "src"}}
 	MustAddSource[int](cnv, src, WorkerModeTransaction)
 
-	// Source outputs int, but joint expects string — must panic.
+	// Source outputs int, but joint expects string - must panic.
 	joint, err := NewReplicateJoint[string]("joint", 2)
 	require.NoError(t, err)
 	require.Panics(t, func() {
@@ -478,7 +478,7 @@ func TestMustAddSinkAfterJoint_Panics_TypeMismatch(t *testing.T) {
 	require.NoError(t, err)
 	MustAddJointAfterNode[int, int](cnv, joint)
 
-	// Joint outputs int, but sink expects string — must panic.
+	// Joint outputs int, but sink expects string - must panic.
 	snk := &stringSink{ConcreteSinkExecutor: ConcreteSinkExecutor[string]{Name: "snk"}}
 	require.Panics(t, func() {
 		MustAddSinkAfterJoint[string](cnv, snk, WorkerModeTransaction)

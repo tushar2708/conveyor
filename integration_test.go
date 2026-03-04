@@ -150,7 +150,7 @@ func TestIntegration_TransactionMode_SourceOnly(t *testing.T) {
 	// channel but nobody reads them. The pipeline should still terminate once the
 	// source is exhausted. However, since there is no downstream consumer the
 	// output channel may fill up and the source goroutines can block. Skip
-	// assertion on collected data — just verify no panic / no error.
+	// assertion on collected data - just verify no panic / no error.
 	snk := &collectingSink{ConcreteSinkExecutor: ConcreteSinkExecutor[int]{Name: "snk"}}
 	require.NoError(t, AddSink[int](cnv, snk, WorkerModeTransaction))
 	require.NoError(t, cnv.Start())

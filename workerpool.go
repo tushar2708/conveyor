@@ -127,6 +127,7 @@ func (cnw *ConcreteNodeWorker) startLoopMode(ctx CnvContext, inputChannel chan a
 					log.Fatalf("Improper setup of Executor[%s], ExecuteLoop() method is required",
 						cnw.Executor.GetName())
 				}
+				ctx.RecordError(cnw.Executor.GetName(), err)
 				return
 			}
 		}()

@@ -23,6 +23,9 @@ type CtxData struct {
 	status         chan string
 	cancelProgress context.CancelFunc
 	// cancelAll      context.CancelFunc
+
+	// errorStats is a pointer so that all derived contexts (WithCancel, WithTimeout) share the same instance.
+	errorStats *ErrorStats
 }
 
 // CnvContext is an interface, which is satisfied by CnvContext.
@@ -36,6 +39,11 @@ type CnvContext interface {
 	SendLog(int32, string, error)
 	SendStatus(string)
 	GetData() interface{}
+
+	// RecordError records an error against the named stage in the pipeline's ErrorStats.
+	RecordError(stage string, err error)
+	// Errors returns the shared ErrorStats instance for this pipeline.
+	Errors() *ErrorStats
 }
 
 // cnvContext is a wrapper over context.Context
@@ -50,6 +58,20 @@ type cnvContext struct {
 // GetData
 func (ctx *cnvContext) GetData() interface{} {
 	return ctx.Data
+}
+
+// RecordError records an error against the named stage in the pipeline's shared ErrorStats.
+// It is a no-op when errorStats has not been initialized (e.g., in tests that use a bare context).
+func (ctx *cnvContext) RecordError(stage string, err error) {
+	if ctx.Data.errorStats != nil {
+		ctx.Data.errorStats.Record(stage, err)
+	}
+}
+
+// Errors returns the shared ErrorStats instance for this pipeline.
+// Returns nil when errorStats has not been initialized.
+func (ctx *cnvContext) Errors() *ErrorStats {
+	return ctx.Data.errorStats
 }
 
 // WithCancel is a wrapper on context.WithCancel() for CnvContext type,

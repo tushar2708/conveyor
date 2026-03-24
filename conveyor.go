@@ -41,6 +41,8 @@ type Conveyor struct {
 	lastJointOutType reflect.Type
 
 	cleanupOnce sync.Once // To ensure that conveyor can't be cleaned up again
+
+	errorStats *ErrorStats
 }
 
 // NewConveyor creates a new Conveyor instance, with all options set to default values/implementations
@@ -68,12 +70,16 @@ func NewConveyor(name string, bufferLen int) (*Conveyor, error) {
 	// Set needProgress to false by default
 	cnv.needProgress = false
 
+	// Initialize shared error statistics for this pipeline.
+	cnv.errorStats = &ErrorStats{}
+
 	_ctx := &cnvContext{
 		Context: context.Background(),
 		Data: CtxData{
-			Name:   name,
-			logs:   make(chan Message, 100),
-			status: make(chan string, 100),
+			Name:       name,
+			logs:       make(chan Message, 100),
+			status:     make(chan string, 100),
+			errorStats: cnv.errorStats,
 		},
 	}
 
@@ -162,6 +168,12 @@ func (cnv *Conveyor) SetCustomContext(ctx CnvContext) *Conveyor {
 // GetConveyorContext gives the conveyor's context object
 func (cnv *Conveyor) GetConveyorContext() CnvContext {
 	return cnv.ctx
+}
+
+// Errors returns the pipeline's accumulated error statistics.
+// Call this after Start() returns to inspect total and per-type counts.
+func (cnv *Conveyor) Errors() *ErrorStats {
+	return cnv.errorStats
 }
 
 // Done returns the context.Done() channel of Conveyor

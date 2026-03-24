@@ -118,6 +118,7 @@ workerLoop:
 			default:
 				ctx.SendLog(2, fmt.Sprintf("Worker:[%s] for Executor:[%s] Execute() Call Failed.",
 					fwp.Name, fwp.Executor.GetUniqueIdentifier()), err)
+				ctx.RecordError(fwp.Executor.GetName(), err)
 			}
 		}(inData)
 

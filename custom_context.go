@@ -38,7 +38,7 @@ type CnvContext interface {
 	Cancel()
 	SendLog(int32, string, error)
 	SendStatus(string)
-	GetData() interface{}
+	GetData() any
 
 	// RecordError records an error against the named stage in the pipeline's ErrorStats.
 	RecordError(stage string, err error)
@@ -56,7 +56,7 @@ type cnvContext struct {
 }
 
 // GetData
-func (ctx *cnvContext) GetData() interface{} {
+func (ctx *cnvContext) GetData() any {
 	return ctx.Data
 }
 

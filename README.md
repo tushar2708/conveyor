@@ -10,7 +10,7 @@
 
 A type-safe Go pipeline library using generics, supporting concurrent pipelines with compile-time type validation between nodes and joints.
 
-> **Breaking Change (v1.1.0):** The API now uses Go generics for compile-time type safety. The old `map[string]interface{}`-based `NodeExecutor` and `JointExecutor` interfaces have been replaced by typed generic equivalents (`SourceExecutor[T]`, `OperationExecutor[TIn, TOut]`, `SinkExecutor[T]`, `JointExecutor[TIn, TOut]`). See [GENERIC_MIGRATION.md](GENERIC_MIGRATION.md) for a detailed migration guide.
+> **Breaking Change (v1.1.0):** The API now uses Go generics for compile-time type safety. The old `map[string]any`-based `NodeExecutor` and `JointExecutor` interfaces have been replaced by typed generic equivalents (`SourceExecutor[T]`, `OperationExecutor[TIn, TOut]`, `SinkExecutor[T]`, `JointExecutor[TIn, TOut]`). See [GENERIC_MIGRATION.md](GENERIC_MIGRATION.md) for a detailed migration guide.
 
 **TL;DR:**
 A pipeline is a standard concurrency pattern in Go, at least in terms of use case & functionality. And there are multiple ways people create them based on their specific requirements. This project is my attempt to create a generic one that can be used in most, if not all use-cases. If you are already aware of what a pipeline is, you can move on to [examples.](https://github.com/tushar2708/conveyor/tree/master/examples "Conveyor Examples") or [Implementation](https://github.com/tushar2708/conveyor#how-to-implement-your-own-nodes) section.

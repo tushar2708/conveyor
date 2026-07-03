@@ -491,7 +491,7 @@ type ConcreteSourceExecutor[TOut any] struct {
 	// Name is the human-readable identifier for this executor.
 	Name string
 	// Data holds any auxiliary data the executor may need at runtime.
-	Data interface{}
+	Data any
 }
 
 // GetName returns the name of the executor.
@@ -550,7 +550,7 @@ type ConcreteOperationExecutor[TIn, TOut any] struct {
 	// Name is the human-readable identifier for this executor.
 	Name string
 	// Data holds any auxiliary data the executor may need at runtime.
-	Data interface{}
+	Data any
 }
 
 // GetName returns the name of the executor.
@@ -610,7 +610,7 @@ type ConcreteSinkExecutor[TIn any] struct {
 	// Name is the human-readable identifier for this executor.
 	Name string
 	// Data holds any auxiliary data the executor may need at runtime.
-	Data interface{}
+	Data any
 }
 
 // GetName returns the name of the executor.

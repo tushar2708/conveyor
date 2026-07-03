@@ -1,7 +1,7 @@
 # Migrating Conveyor to Go Generics
 
 This document explains how the `conveyor` library was migrated from an untyped
-`map[string]interface{}` API to a fully generic, type-safe API using Go 1.18+
+`map[string]any` API to a fully generic, type-safe API using Go 1.18+
 type parameters. It covers what changed for users first, then walks through the
 internal architecture that makes it all work.
 
@@ -9,19 +9,19 @@ internal architecture that makes it all work.
 
 ## Part 1: What Changed for Users
 
-### Before: Everything being passed from one node to the other was `map[string]interface{}`
+### Before: Everything being passed from one node to the other was `map[string]any`
 
 The library exposed a single `NodeExecutor` interface. Every node in
 the pipeline - source, operation, or sink - implemented the same interface, and
-all data flowed as `map[string]interface{}`:
+all data flowed as `map[string]any`:
 
 ```go
 // OLD API
 type NodeExecutor interface {
     GetName() string
     GetUniqueIdentifier() string
-    Execute(ctx CnvContext, inData map[string]interface{}) (map[string]interface{}, error)
-    ExecuteLoop(ctx CnvContext, inChan <-chan map[string]interface{}, outChan chan<- map[string]interface{}) error
+    Execute(ctx CnvContext, inData map[string]any) (map[string]any, error)
+    ExecuteLoop(ctx CnvContext, inChan <-chan map[string]any, outChan chan<- map[string]any) error
     Count() int
     CleanUp() error
 }
@@ -35,9 +35,9 @@ type SquareOperator struct {
     *conveyor.ConcreteNodeExecutor
 }
 
-func (o *SquareOperator) Execute(ctx conveyor.CnvContext, in map[string]interface{}) (map[string]interface{}, error) {
+func (o *SquareOperator) Execute(ctx conveyor.CnvContext, in map[string]any) (map[string]any, error) {
     num := in["number"].(int)           // manual type assertion, panics if wrong
-    return map[string]interface{}{
+    return map[string]any{
         "number": num * num,
     }, nil
 }
@@ -162,16 +162,16 @@ type NumberSource struct {
 }
 
 func (src *NumberSource) ExecuteLoop(ctx conveyor.CnvContext,
-    inChan <-chan map[string]interface{},
-    outChan chan<- map[string]interface{}) error {
+    inChan <-chan map[string]any,
+    outChan chan<- map[string]any) error {
 
     for i := 0; i <= src.CountLimit; i++ {
-        outChan <- map[string]interface{}{"number": i}
+        outChan <- map[string]any{"number": i}
     }
     return nil
 }
 
-// ... SquareOperator, PrinterSink similarly use map[string]interface{}
+// ... SquareOperator, PrinterSink similarly use map[string]any
 
 cnv.AddNodeExecutor(gen, conveyor.WorkerModeLoop, "SOURCE_WORKER")
 cnv.AddNodeExecutor(sqr, conveyor.WorkerModeTransaction, "OPERATION_WORKER")

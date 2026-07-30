@@ -1,3 +1,10 @@
+---
+type: Overview
+title: Migrating Conveyor to Go Generics
+status: draft
+tags: []
+---
+
 # Migrating Conveyor to Go Generics
 
 This document explains how the `conveyor` library was migrated from an untyped

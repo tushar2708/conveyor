@@ -4,9 +4,21 @@ title: conveyor
 status: stable
 tags:
 - readme
+stale_after: 2026-12-31
+generated:
+  by: Tushar Dwivedi
+  at: 2026-08-25T00:00:00Z
 ---
 
 # conveyor
+
+
+| Section | What it covers |
+|---------|----------------|
+| [What does Conveyor do?](#what-does-conveyor-do) | Conveyor does what the name suggests. Just like a conveyor belt, or a production-line, |
+| [How to implement your own nodes and joints?](#how-to-implement-your-own-nodes-and-joints) | There are 4 generic interfaces, one for each role in the pipeline: |
+| [Monitoring, Logging, Progress tracking, and Timeout/Killing.](#monitoring-logging-progress-tracking-and-timeoutkilling) | This is what I believe, is a good to have for anything that solves real world problems. |
+| [Needs more work: Working with a distributed conveyor-based application](#needs-more-work-working-with-a-distributed-conveyor-based-application) | To go further, you need to know about Conveyor Life Cycle Handling. |
 
 [![GitHub license](https://img.shields.io/github/license/mashape/apistatus.svg)]()
 [![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Ftushar2708%2Fconveyor.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Ftushar2708%2Fconveyor?ref=badge_shield)
